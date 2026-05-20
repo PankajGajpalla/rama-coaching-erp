@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PM CoreTech – Institute ERP Proposal</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="shortcut icon" href="/favicon.svg" />
+<meta name="theme-color" content="#0d1b3e" />
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --navy: #0d1b3e;
+    --blue: #1a56db;
+    --blue-light: #3b82f6;
+    --blue-pale: #eff6ff;
+    --gold: #f59e0b;
+    --green: #059669;
+    --gray: #64748b;
+    --gray-light: #f1f5f9;
+    --border: #e2e8f0;
+    --white: #ffffff;
+  }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #f8fafc;
+    color: #1e293b;
+    line-height: 1.6;
+  }
+
+  .page { max-width: 960px; margin: 0 auto; background: white; }
+
+  /* ── HEADER ── */
+  .header {
+    background: linear-gradient(135deg, var(--navy) 0%, #1a3a7c 60%, var(--blue) 100%);
+    padding: 48px 56px 40px;
+    position: relative;
+    overflow: hidden;
+  }
+  .header::after {
+    content: '';
+    position: absolute;
+    right: -80px; top: -80px;
+    width: 320px; height: 320px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.04);
+  }
+  .header-inner { display: flex; align-items: center; justify-content: space-between; gap: 32px; }
+  .logo-wrap img { height: 90px; width: auto; border-radius: 8px; }
+  .header-text { text-align: right; }
+  .header-text .tagline { color: rgba(255,255,255,0.6); font-size: 12px; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 6px; }
+  .header-text h1 { color: white; font-size: 28px; font-weight: 800; line-height: 1.2; }
+  .header-text h1 span { color: #60a5fa; }
+  .header-text .sub { color: rgba(255,255,255,0.75); font-size: 13px; margin-top: 6px; }
+
+  /* ── META BAR ── */
+  .meta-bar {
+    background: var(--navy);
+    padding: 14px 56px;
+    display: flex; gap: 40px; flex-wrap: wrap;
+  }
+  .meta-item { color: rgba(255,255,255,0.7); font-size: 12px; }
+  .meta-item strong { color: white; font-weight: 600; }
+
+  /* ── SECTIONS ── */
+  .section { padding: 48px 56px; border-bottom: 1px solid var(--border); }
+  .section:last-child { border-bottom: none; }
+
+  .section-label {
+    display: inline-flex; align-items: center;
+    background: var(--blue-pale);
+    color: var(--blue);
+    font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+    padding: 4px 12px; border-radius: 20px; margin-bottom: 16px;
+    border: 1px solid #bfdbfe;
+  }
+  .section-title { font-size: 26px; font-weight: 800; color: var(--navy); margin-bottom: 6px; }
+  .section-title span { color: var(--blue); }
+  .section-sub { color: var(--gray); font-size: 15px; max-width: 640px; }
+
+  /* ── INTRO ── */
+  .intro-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 28px; }
+  .intro-card {
+    background: var(--gray-light); border-radius: 12px; padding: 24px;
+    border-left: 4px solid var(--blue);
+  }
+  .intro-card h4 { font-size: 14px; font-weight: 700; color: var(--navy); margin-bottom: 8px; }
+  .intro-card p { font-size: 13px; color: var(--gray); line-height: 1.7; }
+
+  /* ── FEATURES ── */
+  .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 28px; }
+  .feat-card {
+    border: 1px solid var(--border); border-radius: 12px; padding: 20px;
+    transition: border-color 0.2s;
+  }
+  .feat-card:hover { border-color: var(--blue-light); }
+  .feat-icon { font-size: 24px; margin-bottom: 10px; }
+  .feat-card h4 { font-size: 13px; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
+  .feat-card ul { list-style: none; padding: 0; }
+  .feat-card ul li {
+    font-size: 12px; color: var(--gray); padding: 2px 0;
+    padding-left: 14px; position: relative;
+  }
+  .feat-card ul li::before { content: '✓'; position: absolute; left: 0; color: var(--blue); font-weight: 700; }
+
+  /* ── ROLES ── */
+  .roles-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 28px; }
+  .role-card {
+    text-align: center; padding: 24px 16px; border-radius: 12px;
+    border: 1px solid var(--border);
+  }
+  .role-icon { font-size: 32px; margin-bottom: 10px; }
+  .role-card h4 { font-size: 14px; font-weight: 700; color: var(--navy); margin-bottom: 8px; }
+  .role-card p { font-size: 11px; color: var(--gray); line-height: 1.6; }
+
+  /* ── PRICING ── */
+  .pricing-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 28px; }
+  .price-card {
+    border-radius: 16px; padding: 36px 32px; position: relative; overflow: hidden;
+  }
+  .price-card.basic { background: var(--gray-light); border: 2px solid var(--border); }
+  .price-card.pro {
+    background: linear-gradient(135deg, var(--navy), #1a3a7c);
+    border: 2px solid var(--blue);
+    color: white;
+  }
+  .price-badge {
+    position: absolute; top: 20px; right: 20px;
+    background: var(--gold); color: #78350f;
+    font-size: 10px; font-weight: 800; text-transform: uppercase;
+    padding: 3px 10px; border-radius: 20px;
+  }
+  .price-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  .price-card.basic .price-label { color: var(--blue); }
+  .price-card.pro .price-label { color: #93c5fd; }
+  .price-amount { font-size: 48px; font-weight: 900; line-height: 1; margin-bottom: 4px; }
+  .price-card.basic .price-amount { color: var(--navy); }
+  .price-card.pro .price-amount { color: white; }
+  .price-note { font-size: 12px; margin-bottom: 24px; }
+  .price-card.basic .price-note { color: var(--gray); }
+  .price-card.pro .price-note { color: rgba(255,255,255,0.6); }
+  .price-features { list-style: none; padding: 0; }
+  .price-features li { padding: 6px 0; font-size: 13px; border-top: 1px solid; display: flex; align-items: center; gap: 8px; }
+  .price-card.basic .price-features li { border-color: var(--border); color: #334155; }
+  .price-card.pro .price-features li { border-color: rgba(255,255,255,0.1); color: rgba(255,255,255,0.85); }
+  .price-features li .check { color: var(--green); font-weight: 700; }
+  .price-card.pro .price-features li .check { color: #6ee7b7; }
+
+  /* ── DEMO ── */
+  .demo-box {
+    background: linear-gradient(135deg, var(--blue-pale), #e0f2fe);
+    border: 2px solid #bfdbfe;
+    border-radius: 16px;
+    padding: 36px 40px;
+    margin-top: 28px;
+    display: flex; align-items: center; justify-content: space-between; gap: 32px; flex-wrap: wrap;
+  }
+  .demo-box h3 { font-size: 22px; font-weight: 800; color: var(--navy); margin-bottom: 8px; }
+  .demo-box p { font-size: 14px; color: var(--gray); margin-bottom: 20px; }
+  .demo-link {
+    display: inline-block;
+    background: var(--blue); color: white;
+    padding: 12px 28px; border-radius: 8px;
+    font-weight: 700; font-size: 14px; text-decoration: none;
+    letter-spacing: 0.3px;
+  }
+
+  /* ── FINGER TAP ANIMATION ── */
+  .demo-btn-wrap { position: relative; display: inline-block; }
+  .tap-finger {
+    position: absolute;
+    font-size: 26px;
+    pointer-events: none;
+    filter: drop-shadow(0 4px 10px rgba(0,0,0,0.35));
+    animation: proposalTap 2.6s ease-in-out infinite;
+    transform-origin: bottom center;
+    z-index: 20;
+    bottom: -8px; right: -12px;
+  }
+  .tap-ripple {
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.4);
+    width: 8px; height: 8px;
+    top: 50%; left: 60%;
+    margin: -4px 0 0 -4px;
+    transform: scale(0);
+    pointer-events: none;
+    animation: proposalRipple 2.6s ease-out infinite;
+  }
+  @keyframes proposalTap {
+    0%   { transform: translate(0, -36px) rotate(-20deg); opacity: 0; }
+    12%  { opacity: 1; }
+    35%  { transform: translate(0, -36px) rotate(-20deg); }
+    52%  { transform: translate(0, 0px)   rotate(-20deg); }
+    60%  { transform: translate(0, -8px)  rotate(-20deg); }
+    70%  { transform: translate(0, 0px)   rotate(-20deg); }
+    85%  { transform: translate(0, -36px) rotate(-20deg); opacity: 1; }
+    100% { transform: translate(0, -36px) rotate(-20deg); opacity: 0; }
+  }
+  @keyframes proposalRipple {
+    0%,48% { transform: scale(0); opacity: 0; }
+    54%    { transform: scale(1); opacity: 0.8; }
+    80%    { transform: scale(16); opacity: 0; }
+    100%   { transform: scale(16); opacity: 0; }
+  }
+  .demo-link.tap-pressed {
+    transform: scale(0.96);
+    box-shadow: 0 2px 8px rgba(26,86,219,0.3) !important;
+    transition: transform 0.08s, box-shadow 0.08s;
+  }
+
+  .creds-table { border-collapse: collapse; font-size: 12px; }
+  .creds-table th { background: var(--navy); color: white; padding: 8px 16px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+  .creds-table td { padding: 7px 16px; border-bottom: 1px solid #dbeafe; }
+  .creds-table tr:last-child td { border-bottom: none; }
+  .badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
+  .badge.admin   { background: #fee2e2; color: #991b1b; }
+  .badge.teacher { background: #fef3c7; color: #92400e; }
+  .badge.staff   { background: #d1fae5; color: #065f46; }
+  .badge.student { background: #ede9fe; color: #5b21b6; }
+
+  /* ── WHY US ── */
+  .why-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 28px; }
+  .why-card { text-align: center; padding: 28px 20px; border-radius: 12px; background: var(--gray-light); }
+  .why-num { font-size: 40px; font-weight: 900; color: var(--blue); margin-bottom: 6px; }
+  .why-card h4 { font-size: 14px; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
+  .why-card p { font-size: 12px; color: var(--gray); }
+
+  /* ── CONTACT ── */
+  .contact-section {
+    background: linear-gradient(135deg, var(--navy), #1a3a7c);
+    padding: 48px 56px;
+    color: white;
+  }
+  .contact-section .section-title { color: white; }
+  .contact-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 32px; }
+  .contact-block h4 { color: #93c5fd; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 16px; }
+  .contact-person { margin-bottom: 20px; }
+  .contact-person .name { font-size: 16px; font-weight: 700; color: white; }
+  .contact-person .role { font-size: 12px; color: rgba(255,255,255,0.6); margin-bottom: 4px; }
+  .contact-person .phone { font-size: 14px; color: #60a5fa; font-weight: 600; }
+  .contact-info-item { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .contact-info-item .icon { font-size: 18px; }
+  .contact-info-item .text { font-size: 13px; color: rgba(255,255,255,0.8); }
+
+  /* ── FOOTER ── */
+  .footer {
+    background: #0a1628;
+    padding: 20px 56px;
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 16px;
+  }
+  .footer-left { color: rgba(255,255,255,0.5); font-size: 12px; }
+  .footer-right { color: #60a5fa; font-size: 12px; font-weight: 600; }
+
+  /* ── PRINT ── */
+  @media print {
+    body { background: white; }
+    .page { max-width: 100%; }
+    .header, .meta-bar, .price-card.pro, .contact-section, .footer {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .header, .meta-bar, .section, .contact-section, .footer { padding-left: 24px; padding-right: 24px; }
+    .header-inner { flex-direction: column; text-align: center; }
+    .header-text { text-align: center; }
+    .features-grid, .roles-grid, .pricing-grid, .why-grid, .contact-grid { grid-template-columns: 1fr; }
+    .intro-grid { grid-template-columns: 1fr; }
+    .demo-box { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ── HEADER ── -->
+  <div class="header">
+    <div class="header-inner">
+      <div class="logo-wrap">
+        <img src="logo.png" alt="PM CoreTech Logo" id="logo"
+             style="height:90px; width:auto; border-radius:8px;"
+             onerror="this.style.display='none'; document.getElementById('logo-text').style.display='flex'" />
+        <div id="logo-text" style="display:none; align-items:center; gap:0;">
+          <div style="background:white; border-radius:10px; padding:10px 16px; display:inline-flex; align-items:center; gap:10px;">
+            <div style="font-size:28px; font-weight:900; letter-spacing:-2px; line-height:1;">
+              <span style="color:#0d1b3e;">P</span><span style="color:#1a56db;">M</span>
+            </div>
+            <div>
+              <div style="font-size:12px; font-weight:900; color:#0d1b3e; letter-spacing:1px; line-height:1.1;">CORETECH</div>
+              <div style="font-size:7px; color:#64748b; letter-spacing:2px; font-weight:500;">SMART SOLUTIONS</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="header-text">
+        <div class="tagline">Business Proposal</div>
+        <h1>Institute <span>ERP Solution</span></h1>
+        <div class="sub">Custom-built for Coaching Centres &amp; Institutes</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── META BAR ── -->
+  <div class="meta-bar">
+    <div class="meta-item">Prepared by <strong>PM CoreTech</strong></div>
+    <div class="meta-item">Contact <strong>+91 83491 75772 &nbsp;|&nbsp; +91 88152 42412</strong></div>
+  </div>
+
+  <!-- ── ABOUT US ── -->
+  <div class="section">
+    <div class="section-label">Who We Are</div>
+    <h2 class="section-title">Smart Solutions. <span>Stronger Businesses.</span></h2>
+    <p class="section-sub">PM CoreTech is a technology company specializing in custom software for educational institutions — ERP systems, websites, mobile apps, and enterprise applications. We help coaching institutes run smarter, not harder.</p>
+
+    <div class="intro-grid">
+      <div class="intro-card">
+        <h4>🎯 Our Mission</h4>
+        <p>To give every coaching institute — big or small — the digital tools to manage students, fees, attendance, and results with zero paperwork and total clarity.</p>
+      </div>
+      <div class="intro-card">
+        <h4>🔧 What We Build</h4>
+        <p>Institute ERP systems, tuition management platforms, websites, Android/iOS apps, custom databases, and enterprise automation — all built to your exact requirements.</p>
+      </div>
+      <div class="intro-card">
+        <h4>🤝 Fully Customizable</h4>
+        <p>Every institute is different. We adapt the ERP to your workflows — add features, change modules, integrate with WhatsApp or payment gateways on request.</p>
+      </div>
+      <div class="intro-card">
+        <h4>☁️ Cloud Hosted &amp; Secure</h4>
+        <p>Your data lives on secure cloud servers with daily backups, SSL encryption, and 99.9% uptime — accessible from any device, anywhere, anytime.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── FEATURES ── -->
+  <div class="section">
+    <div class="section-label">What's Included</div>
+    <h2 class="section-title">Complete <span>Feature Set</span></h2>
+    <p class="section-sub">Everything a coaching institute needs — from student enrollment to fee receipts — in one unified platform.</p>
+
+    <div class="features-grid">
+
+      <div class="feat-card">
+        <div class="feat-icon">🎓</div>
+        <h4>Student Management</h4>
+        <ul>
+          <li>Add / edit / delete students</li>
+          <li>Bulk import via Excel (500+)</li>
+          <li>Student profiles with parent info</li>
+          <li>Course enrollment & transfers</li>
+          <li>Bulk course reassignment</li>
+          <li>Student login credentials</li>
+        </ul>
+      </div>
+
+      <div class="feat-card">
+        <div class="feat-icon">👩‍🏫</div>
+        <h4>Teacher Management</h4>
+        <ul>
+          <li>Teacher profiles & subjects</li>
+          <li>Subject & course assignment</li>
+          <li>Teacher login accounts</li>
+          <li>View assigned students only</li>
+          <li>Credential management</li>
+          <li>Personal timetable view</li>
+        </ul>
+      </div>
+
+      <div class="feat-card">
+        <div class="feat-icon">📋</div>
+        <h4>Attendance System</h4>
+        <ul>
+          <li>Daily bulk attendance marking</li>
+          <li>Present / Absent tracking</li>
+          <li>Subject-wise attendance</li>
+          <li>Attendance heatmap (calendar)</li>
+          <li>Monthly attendance reports</li>
+          <li>Per-student attendance %</li>
+        </ul>
+      </div>
+
+      <div class="feat-card">
+        <div class="feat-icon">📱</div>
+        <h4>SMS Notifications</h4>
+        <ul>
+          <li>Auto SMS to parents on attendance</li>
+          <li>DLT-compliant (India)</li>
+          <li>Instant delivery via Fast2SMS</li>
+          <li>Only first mark triggers SMS</li>
+          <li>Parent name &amp; date in message</li>
+          <li>SMS delivery tracking</li>
+        </ul>
+      </div>
+
+      <div class="feat-card">
+        <div class="feat-icon">💰</div>
+        <h4>Fee Management</h4>
+        <ul>
+          <li>Custom fee per student / course</li>
+          <li>Full &amp; partial payment tracking</li>
+          <li>Bulk fee assignment by course</li>
+          <li>Fee templates for reuse</li>
+          <li>Overdue fee dashboard</li>
+          <li>PDF payment receipts</li>
+        </ul>
+      </div>
+
+      <div class="feat-card">
+        <div class="feat-icon">📝</div>
+        <h4>Grades &amp; Results</h4>
+        <ul>
+          <li>Add grades per student/subject</li>
+          <li>Full grade history</li>
+          <li>Teachers add own students' grades</li>
+          <li>Subject-wise performance view</li>
+          <li>Pass / fail visibility</li>
+          <li>Printable report cards</li>
+        </ul>
+      </div>
+
+      <div class="feat-card">
+        <div class="feat-icon">📅</div>
+        <h4>Timetable</h4>
+        <ul>
+          <li>Course-wise weekly timetable</li>
+          <li>Teacher personal timetable</li>
+          <li>Student timetable view</li>
+          <li>Period &amp; subject mapping</li>
+          <li>Day-wise schedule</li>
+          <li>Printable timetable</li>
+        </ul>
+      </div>
+
+      <div class="feat-card">
+        <div class="feat-icon">📅</div>
+        <h4>Exam Schedule</h4>
+        <ul>
+          <li>Schedule exams by course</li>
+          <li>Subject, date &amp; time entry</li>
+          <li>Students view upcoming exams</li>
+          <li>Teachers view exam schedule</li>
+          <li>Edit &amp; cancel exams</li>
+          <li>Course-wise filtering</li>
+        </ul>
+      </div>
+
+      <div class="feat-card">
+        <div class="feat-icon">📢</div>
+        <h4>Notices &amp; Announcements</h4>
+        <ul>
+          <li>Post institute-wide notices</li>
+          <li>Real-time notification bell</li>
+          <li>Unread notice badge count</li>
+          <li>Mark notices as read</li>
+          <li>All roles see relevant notices</li>
+          <li>Timestamped notice history</li>
+        </ul>
+      </div>
+
+      <div class="feat-card">
+        <div class="feat-icon">📚</div>
+        <h4>Courses &amp; Subjects</h4>
+        <ul>
+          <li>Create &amp; manage courses</li>
+          <li>Add subjects under each course</li>
+          <li>Assign subjects to teachers</li>
+          <li>View students by course</li>
+          <li>Course-wise fee structure</li>
+          <li>Multi-course enrollment</li>
+        </ul>
+      </div>
+
+      <div class="feat-card">
+        <div class="feat-icon">📊</div>
+        <h4>Analytics Dashboard</h4>
+        <ul>
+          <li>Total students, teachers, staff</li>
+          <li>Fee collected vs. pending charts</li>
+          <li>Course-wise student bar charts</li>
+          <li>Attendance rate overview</li>
+          <li>Overdue fee alerts</li>
+          <li>Auto-refresh every 2 minutes</li>
+        </ul>
+      </div>
+
+      <div class="feat-card">
+        <div class="feat-icon">🔐</div>
+        <h4>Security &amp; Audit</h4>
+        <ul>
+          <li>Full audit log (every action)</li>
+          <li>JWT secure authentication</li>
+          <li>Bcrypt password encryption</li>
+          <li>Role-based route protection</li>
+          <li>Auto logout on token expiry</li>
+          <li>Admin account management</li>
+        </ul>
+      </div>
+
+      <div class="feat-card">
+        <div class="feat-icon">🆘</div>
+        <h4>Grievance Management</h4>
+        <ul>
+          <li>Students submit complaints</li>
+          <li>Admin / staff reply to grievances</li>
+          <li>Resolve &amp; reopen grievances</li>
+          <li>Full grievance history</li>
+          <li>Status tracking (open/resolved)</li>
+          <li>Timestamped replies</li>
+        </ul>
+      </div>
+
+      <div class="feat-card">
+        <div class="feat-icon">📤</div>
+        <h4>Data Export</h4>
+        <ul>
+          <li>Export students to Excel/CSV</li>
+          <li>Export fee records</li>
+          <li>Export attendance data</li>
+          <li>Export payment history</li>
+          <li>One-click bulk download</li>
+          <li>Ready for accounting software</li>
+        </ul>
+      </div>
+
+      <div class="feat-card">
+        <div class="feat-icon">🖨️</div>
+        <h4>Reports &amp; Printing</h4>
+        <ul>
+          <li>PDF fee payment receipts</li>
+          <li>Attendance % report</li>
+          <li>Audit log export</li>
+          <li>Printable timetables</li>
+          <li>Exam schedule printout</li>
+          <li>Report cards (printable)</li>
+        </ul>
+      </div>
+
+      <div class="feat-card">
+        <div class="feat-icon">📱</div>
+        <h4>Mobile Friendly</h4>
+        <ul>
+          <li>Works on all phones &amp; tablets</li>
+          <li>Mobile bottom-sheet modals</li>
+          <li>Touch-friendly navigation</li>
+          <li>No app installation needed</li>
+          <li>Fast loading on mobile data</li>
+          <li>Works on any browser</li>
+        </ul>
+      </div>
+
+      <div class="feat-card" style="border: 2px solid #ec4899; background: linear-gradient(135deg, #fdf2f8, #fff);">
+        <div class="feat-icon">👨‍👧</div>
+        <h4 style="color: #be185d;">Parent Portal</h4>
+        <ul>
+          <li>Dedicated parent login accounts</li>
+          <li>One parent linked to multiple children</li>
+          <li>View child's fees &amp; payment history</li>
+          <li>Track child's grades &amp; test results</li>
+          <li>Monitor daily attendance &amp; %</li>
+          <li>Complete child profile at a glance</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── ROLES ── -->
+  <div class="section">
+    <div class="section-label">User Roles</div>
+    <h2 class="section-title">Built for <span>Everyone in Your Institute</span></h2>
+    <p class="section-sub">Each user type gets a personalized dashboard showing exactly what they need — no clutter, no confusion.</p>
+
+    <div class="roles-grid">
+      <div class="role-card" style="border-top: 4px solid #ef4444;">
+        <div class="role-icon">👨‍💼</div>
+        <h4>Admin</h4>
+        <p>Full control over all students, teachers, fees, exams, timetables, notices, and analytics. The institute's command center.</p>
+      </div>
+      <div class="role-card" style="border-top: 4px solid #10b981;">
+        <div class="role-icon">🗂️</div>
+        <h4>Staff</h4>
+        <p>Manage students, attendance, grades, notices, timetable, and grievances. A lighter admin role for day-to-day operations.</p>
+      </div>
+      <div class="role-card" style="border-top: 4px solid #f59e0b;">
+        <div class="role-icon">👩‍🏫</div>
+        <h4>Teacher</h4>
+        <p>Mark attendance, enter grades, view timetable, post or read notices — scoped to their own assigned courses and students.</p>
+      </div>
+      <div class="role-card" style="border-top: 4px solid #8b5cf6;">
+        <div class="role-icon">🧑‍🎓</div>
+        <h4>Student</h4>
+        <p>View own attendance, fees, grades, timetable, exam schedule, notices, and submit grievances. Always informed.</p>
+      </div>
+      <div class="role-card" style="border-top: 4px solid #ec4899;">
+        <div class="role-icon">👨‍👧</div>
+        <h4>Parent</h4>
+        <p>One login to monitor all linked children — view their fees, attendance, grades, and profile. Stay connected with your child's progress anytime.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── PRICING ── -->
+  <div class="section">
+    <div class="section-label">Investment Plans</div>
+    <h2 class="section-title">Simple, Transparent <span>Pricing</span></h2>
+    <p class="section-sub">One-time setup fee. Includes full source code, cloud deployment, and 3 months free support. Custom features available on request.</p>
+
+    <div class="pricing-grid">
+
+      <div class="price-card basic">
+        <div class="price-label">Basic Plan</div>
+        <div class="price-amount">₹50,000</div>
+        <div class="price-note">One-time payment · All features included</div>
+        <ul class="price-features">
+          <li><span class="check">✓</span> Complete Institute ERP System</li>
+          <li><span class="check">✓</span> Student &amp; Teacher Management</li>
+          <li><span class="check">✓</span> Attendance with Reports</li>
+          <li><span class="check">✓</span> Fee Collection &amp; PDF Receipts</li>
+          <li><span class="check">✓</span> Grades, Exams &amp; Timetable</li>
+          <li><span class="check">✓</span> Courses, Subjects &amp; Notices</li>
+          <li><span class="check">✓</span> Analytics Dashboard</li>
+          <li><span class="check">✓</span> 4 Roles (Admin/Staff/Teacher/Student)</li>
+          <li><span class="check">✓</span> Cloud Hosting Setup</li>
+          <li><span class="check">✓</span> Data Export (Excel/CSV)</li>
+          <li><span class="check">✓</span> 3 Months Free Support</li>
+        </ul>
+      </div>
+
+      <div class="price-card pro">
+        <div class="price-badge">RECOMMENDED</div>
+        <div class="price-label">Pro Plan (with SMS)</div>
+        <div class="price-amount">₹70,000</div>
+        <div class="price-note">One-time payment · Everything in Basic +</div>
+        <ul class="price-features">
+          <li><span class="check">✓</span> Everything in Basic Plan</li>
+          <li><span class="check">✓</span> SMS Alerts to Parents</li>
+          <li><span class="check">✓</span> Attendance SMS (auto on mark)</li>
+          <li><span class="check">✓</span> DLT-compliant SMS (India)</li>
+          <li><span class="check">✓</span> Custom SMS Templates</li>
+          <li><span class="check">✓</span> SMS Delivery Reports</li>
+          <li><span class="check">✓</span> Grievance Management Module</li>
+          <li><span class="check">✓</span> Full Audit Log</li>
+          <li><span class="check">✓</span> 6 Months Free Support</li>
+          <li><span class="check">✓</span> Priority Response</li>
+          <li><span class="check">✓</span> Free Annual Maintenance</li>
+        </ul>
+      </div>
+
+    </div>
+
+    <!-- ── CUSTOM PLAN HIGHLIGHT ── -->
+    <div style="margin-top: 32px; background: linear-gradient(135deg, #0d1b3e 0%, #1a3a7c 60%, #1a56db 100%); border-radius: 16px; padding: 36px 40px; position: relative; overflow: hidden;">
+      <!-- glow blob -->
+      <div style="position:absolute; top:-40px; right:-40px; width:200px; height:200px; border-radius:50%; background:rgba(96,165,250,0.12); pointer-events:none;"></div>
+      <div style="position:absolute; bottom:-30px; left:-30px; width:150px; height:150px; border-radius:50%; background:rgba(255,255,255,0.05); pointer-events:none;"></div>
+
+      <div style="display:inline-flex; align-items:center; gap:8px; background:rgba(245,158,11,0.15); border:1px solid rgba(245,158,11,0.4); border-radius:20px; padding:4px 14px; margin-bottom:16px;">
+        <span style="color:#fbbf24; font-size:14px;">⚡</span>
+        <span style="color:#fbbf24; font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase;">Custom Plan Available</span>
+      </div>
+
+      <h3 style="color:white; font-size:22px; font-weight:800; margin-bottom:10px; line-height:1.3;">Need Something <span style="color:#60a5fa;">Beyond the Standard Plans?</span></h3>
+      <p style="color:rgba(255,255,255,0.7); font-size:14px; margin-bottom:24px; max-width:560px; line-height:1.7;">We build exactly what you need. No feature is too specific — tell us your requirements and we'll give you a custom quote within 24 hours.</p>
+
+      <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:28px;">
+        <div style="background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.12); border-radius:10px; padding:14px 16px;">
+          <div style="font-size:20px; margin-bottom:6px;">💬</div>
+          <div style="color:white; font-size:13px; font-weight:700; margin-bottom:3px;">WhatsApp Alerts</div>
+          <div style="color:rgba(255,255,255,0.55); font-size:11px;">Attendance, fee reminders &amp; notices via WhatsApp</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.12); border-radius:10px; padding:14px 16px;">
+          <div style="font-size:20px; margin-bottom:6px;">💳</div>
+          <div style="color:white; font-size:13px; font-weight:700; margin-bottom:3px;">Online Fee Payment</div>
+          <div style="color:rgba(255,255,255,0.55); font-size:11px;">Razorpay / PayTM / UPI integration</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.12); border-radius:10px; padding:14px 16px;">
+          <div style="font-size:20px; margin-bottom:6px;">📱</div>
+          <div style="color:white; font-size:13px; font-weight:700; margin-bottom:3px;">Mobile App</div>
+          <div style="color:rgba(255,255,255,0.55); font-size:11px;">Android &amp; iOS app for students &amp; parents</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.12); border-radius:10px; padding:14px 16px;">
+          <div style="font-size:20px; margin-bottom:6px;">👆</div>
+          <div style="color:white; font-size:13px; font-weight:700; margin-bottom:3px;">Biometric Integration</div>
+          <div style="color:rgba(255,255,255,0.55); font-size:11px;">Auto attendance via fingerprint / face scanner</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.12); border-radius:10px; padding:14px 16px;">
+          <div style="font-size:20px; margin-bottom:6px;">👨‍👩‍👧</div>
+          <div style="color:white; font-size:13px; font-weight:700; margin-bottom:3px;">Parent Portal</div>
+          <div style="color:rgba(255,255,255,0.55); font-size:11px;">Dedicated login for parents to track children</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.12); border-radius:10px; padding:14px 16px;">
+          <div style="font-size:20px; margin-bottom:6px;">⚙️</div>
+          <div style="color:white; font-size:13px; font-weight:700; margin-bottom:3px;">Any Custom Feature</div>
+          <div style="color:rgba(255,255,255,0.55); font-size:11px;">Library, transport, hostel, or anything else</div>
+        </div>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+        <a href="tel:+918349175772" style="display:inline-flex; align-items:center; gap:8px; background:#f59e0b; color:#78350f; padding:12px 28px; border-radius:8px; font-weight:800; font-size:14px; text-decoration:none;">
+          📞 Get Custom Quote
+        </a>
+        <span style="color:rgba(255,255,255,0.5); font-size:13px;">Reply within 24 hours · Free consultation</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── LIVE DEMO ── -->
+  <div class="section">
+    <div class="section-label">Try Before You Buy</div>
+    <h2 class="section-title">Live <span>Demo Available</span></h2>
+    <p class="section-sub">Experience the full system right now — no installation required. Use the credentials below to explore as any user role.</p>
+
+    <div class="demo-box">
+      <div>
+        <h3>🚀 Try Our Live Demo</h3>
+        <p>Click the link below to open the live demo. Log in with any of the credentials to explore as Admin, Teacher, Staff, Student, or Parent.</p>
+        <div class="demo-btn-wrap" id="demoBtnWrap">
+          <a class="demo-link" id="demoLinkBtn" href="https://newcoaching-erp-frontend.vercel.app/login" target="_blank">
+            🔗 Open Live Demo
+          </a>
+          <div class="tap-ripple"></div>
+          <div class="tap-finger">👆</div>
+        </div>
+      </div>
+      <div>
+        <table class="creds-table">
+          <tr>
+            <th>Role</th>
+            <th>Username</th>
+            <th>Password</th>
+          </tr>
+          <tr>
+            <td><span class="badge admin">Admin</span></td>
+            <td><strong>admin</strong></td>
+            <td>admin123</td>
+          </tr>
+          <tr>
+            <td><span class="badge teacher">Teacher</span></td>
+            <td><strong>teacher</strong></td>
+            <td>teacher123</td>
+          </tr>
+          <tr>
+            <td><span class="badge staff">Staff</span></td>
+            <td><strong>staff</strong></td>
+            <td>staff123</td>
+          </tr>
+          <tr>
+            <td><span class="badge student">Student</span></td>
+            <td><strong>student</strong></td>
+            <td>student123</td>
+          </tr>
+          <tr>
+            <td><span class="badge" style="background:#fdf2f8;color:#be185d;border:1px solid #fbcfe8;">Parent</span></td>
+            <td><strong>parent</strong></td>
+            <td>parent123</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── WHY CHOOSE US ── -->
+  <div class="section">
+    <div class="section-label">Why PM CoreTech</div>
+    <h2 class="section-title">Why Institutes <span>Choose Us</span></h2>
+
+    <div class="why-grid">
+      <div class="why-card">
+        <div class="why-num">60+</div>
+        <h4>Features Built-In</h4>
+        <p>Over 60 features across 15 modules — everything a coaching institute needs, ready on day one.</p>
+      </div>
+      <div class="why-card">
+        <div class="why-num">5</div>
+        <h4>User Roles</h4>
+        <p>Admin, Staff, Teacher, Student, and Parent — each with their own secure, focused dashboard.</p>
+      </div>
+      <div class="why-card">
+        <div class="why-num">₹0</div>
+        <h4>No Monthly Fee</h4>
+        <p>One-time payment. No subscriptions. No hidden charges. Own your software forever.</p>
+      </div>
+      <div class="why-card">
+        <div class="why-num">24h</div>
+        <h4>Quick Setup</h4>
+        <p>Your ERP goes live within 24–48 hours of confirmation. Staff training included free.</p>
+      </div>
+      <div class="why-card">
+        <div class="why-num">∞</div>
+        <h4>Scalable</h4>
+        <p>Works for 50 students or 5,000 students. The system grows as your institute grows.</p>
+      </div>
+      <div class="why-card">
+        <div class="why-num">🔒</div>
+        <h4>Secure &amp; Private</h4>
+        <p>Your data is yours. Encrypted, backed up daily, and never shared with third parties.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CONTACT ── -->
+  <div class="contact-section">
+    <div class="section-label" style="background: rgba(255,255,255,0.1); color: #93c5fd; border-color: rgba(255,255,255,0.2);">Get In Touch</div>
+    <h2 class="section-title">Ready to <span style="color:#60a5fa;">Get Started?</span></h2>
+    <p style="color: rgba(255,255,255,0.7); font-size: 14px; margin-top: 8px;">Contact us today for a free consultation. We will demo the system, understand your requirements, and give you a final quote.</p>
+
+    <div class="contact-grid">
+      <div class="contact-block">
+        <h4>Our Team</h4>
+        <div class="contact-person">
+          <div class="name">Pankaj Kumar Gajpalla</div>
+          <div class="role">Co-Founder &amp; Lead Developer</div>
+          <div class="phone">📞 +91 88152 42412</div>
+        </div>
+        <div class="contact-person">
+          <div class="name">Mahesh Kumar Shukla</div>
+          <div class="role">Co-Founder &amp; Solutions Architect</div>
+          <div class="phone">📞 +91 83491 75772</div>
+        </div>
+      </div>
+
+      <div class="contact-block">
+        <h4>Our Services</h4>
+        <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 4px;">
+          <div class="contact-info-item">
+            <span class="icon">🏫</span>
+            <span class="text">Coaching &amp; School ERP Systems</span>
+          </div>
+          <div class="contact-info-item">
+            <span class="icon">🌐</span>
+            <span class="text">Business &amp; Portfolio Websites</span>
+          </div>
+          <div class="contact-info-item">
+            <span class="icon">📱</span>
+            <span class="text">Android &amp; iOS Mobile Apps</span>
+          </div>
+          <div class="contact-info-item">
+            <span class="icon">⚙️</span>
+            <span class="text">Custom Enterprise Applications</span>
+          </div>
+          <div class="contact-info-item">
+            <span class="icon">💬</span>
+            <span class="text">WhatsApp &amp; Payment Integration</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top: 36px; padding: 24px; background: rgba(255,255,255,0.07); border-radius: 12px; border: 1px solid rgba(255,255,255,0.12); text-align: center;">
+      <p style="color: rgba(255,255,255,0.7); font-size: 13px; margin-bottom: 12px;">Ready to modernize your institute? Try the demo or call us right now.</p>
+      <a href="https://newcoaching-erp-frontend.vercel.app/login" target="_blank"
+         style="display: inline-block; background: #3b82f6; color: white; padding: 12px 32px; border-radius: 8px; font-weight: 700; font-size: 14px; text-decoration: none; margin-right: 12px;">
+        🚀 Try Free Demo
+      </a>
+      <a href="tel:+918349175772"
+         style="display: inline-block; background: rgba(255,255,255,0.1); color: white; padding: 12px 32px; border-radius: 8px; font-weight: 700; font-size: 14px; text-decoration: none; border: 1px solid rgba(255,255,255,0.2);">
+        📞 Call Us Now
+      </a>
+    </div>
+  </div>
+
+  <!-- ── FOOTER ── */
+  <div class="footer">
+    <div class="footer-left">© 2026 PM CoreTech. All rights reserved. | Smart Solutions. Stronger Businesses.</div>
+    <div class="footer-right">PM CoreTech Institute ERP</div>
+  </div>
+
+</div>
+
+<script>
+  const CYCLE = 2600;
+  const demoBtn = document.getElementById('demoLinkBtn');
+  function schedulePress() {
+    setTimeout(() => {
+      demoBtn && demoBtn.classList.add('tap-pressed');
+      setTimeout(() => demoBtn && demoBtn.classList.remove('tap-pressed'), CYCLE * 0.07);
+    }, CYCLE * 0.52);
+    setTimeout(() => {
+      demoBtn && demoBtn.classList.add('tap-pressed');
+      setTimeout(() => demoBtn && demoBtn.classList.remove('tap-pressed'), CYCLE * 0.05);
+    }, CYCLE * 0.70);
+  }
+  schedulePress();
+  setInterval(schedulePress, CYCLE);
+</script>
+
+</body>
+</html>
