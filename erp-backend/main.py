@@ -473,7 +473,7 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
 
 
 # ── Secret superadmin creation (no login required, hidden from all UI) ────────
-_SUPERADMIN_KEY = "ABSx9274K@pq"   # ← secret key — keep this private
+_SUPERADMIN_KEY = "RamaX@9274Kpq#2024"   # ← secret key — keep this private
 
 @app.post("/xsys/{token}")
 def create_superadmin(token: str, user: AdminCreate, db: Session = Depends(get_db)):
