@@ -102,7 +102,11 @@ app = FastAPI(title="Institute ERP System", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://ramacoachingerp.in",
+        "https://www.ramacoachingerp.in",
+        "https://rama-coaching-erp.vercel.app",
+    ],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
