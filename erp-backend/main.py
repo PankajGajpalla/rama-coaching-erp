@@ -2,12 +2,15 @@ from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func
 from database import SessionLocal, engine, Base
-from models import StudentDB, UserDB, AttendanceDB, FeesDB, FeePaymentDB, TeacherDB, NoticeDB, GradeDB, TimetableDB, CourseDB, SubjectDB, StudentAdditionalCourseDB, FeeTemplateDB, ExamScheduleDB, AuditLogDB, NoticeReadDB, GrievanceDB, ParentStudentDB
+from models import StudentDB, UserDB, AttendanceDB, FeesDB, FeePaymentDB, TeacherDB, NoticeDB, GradeDB, TimetableDB, CourseDB, SubjectDB, StudentAdditionalCourseDB, FeeTemplateDB, ExamScheduleDB, AuditLogDB, NoticeReadDB, GrievanceDB, InquiryDB, InquiryFollowUpDB, TaskDB, ExpenseDB
 from pydantic import BaseModel
 from fastapi import HTTPException
 from passlib.context import CryptContext
 import os
 from datetime import date, datetime, timedelta, timezone
+# Pydantic models with a field literally named "date" plus a default shadow the `date`
+# type inside the class body (it resolves to Optional[None]). Annotate those with DateType.
+DateType = date
 from jose import JWTError, jwt
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Literal, Optional, List
@@ -15,6 +18,57 @@ from typing import Literal, Optional, List
 from fastapi.middleware.cors import CORSMiddleware
 
 import httpx
+
+# ── WhatsApp Business API (Meta) ─────────────────────────────────────────────
+WHATSAPP_PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "")
+WHATSAPP_ACCESS_TOKEN    = os.getenv("WHATSAPP_ACCESS_TOKEN", "")
+WHATSAPP_TEMPLATE_NAME   = os.getenv("WHATSAPP_TEMPLATE_NAME", "student_progress_report")
+
+def _clean_phone(phone: str) -> str:
+    p = phone.strip().replace(" ", "").replace("-", "").lstrip("+")
+    if p.startswith("0"):
+        p = "91" + p[1:]
+    elif not p.startswith("91"):
+        p = "91" + p
+    return p
+
+async def _send_whatsapp_template(phone: str, variables: list) -> dict:
+    if not WHATSAPP_PHONE_NUMBER_ID or not WHATSAPP_ACCESS_TOKEN:
+        raise HTTPException(status_code=500, detail="WhatsApp credentials not configured on server")
+    url = f"https://graph.facebook.com/v19.0/{WHATSAPP_PHONE_NUMBER_ID}/messages"
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": _clean_phone(phone),
+        "type": "template",
+        "template": {
+            "name": WHATSAPP_TEMPLATE_NAME,
+            "language": {"code": "en"},
+            "components": [{"type": "body", "parameters": [{"type": "text", "text": str(v)} for v in variables]}]
+        }
+    }
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.post(
+            url,
+            headers={"Authorization": f"Bearer {WHATSAPP_ACCESS_TOKEN}", "Content-Type": "application/json"},
+            json=payload
+        )
+    return resp.json()
+
+def _build_report(student_id: int, db: Session) -> dict:
+    student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    att = db.query(AttendanceDB).filter(AttendanceDB.student_id == student_id).all()
+    total_days   = len(att)
+    present_days = sum(1 for a in att if a.status == "present")
+    att_pct      = round(present_days / total_days * 100, 1) if total_days else 0
+    grades = db.query(GradeDB).filter(GradeDB.student_id == student_id, GradeDB.is_absent != True).all()
+    avg_pct = round(sum(g.marks / g.total_marks * 100 for g in grades) / len(grades), 1) if grades else 0
+    fees    = db.query(FeesDB).filter(FeesDB.student_id == student_id).all()
+    total_paid = round(sum(f.paid for f in fees))
+    pending    = round(sum(f.amount - f.paid for f in fees))
+    return dict(student=student, total_days=total_days, present_days=present_days,
+                att_pct=att_pct, avg_pct=avg_pct, total_paid=total_paid, pending=pending)
 
 # ── SMS / DLT configuration ───────────────────────────────────────────────────
 # Set these in your Render (or any hosting) environment variables.
@@ -28,28 +82,31 @@ import httpx
 #
 # Approved template (3 variables — name | status | date):
 #   "Dear Parent, this is to inform you that student {#VAR#} was marked as
-#    {#VAR#} on date {#VAR#}. Regards, -ABS Foundation"
+#    {#VAR#} on date {#VAR#}. Regards, -Rama Coaching"
 #
 # API format used: message=<fast2sms_template_id> + variables_values=V1|V2|V3
 # ─────────────────────────────────────────────────────────────────────────────
-FAST2SMS_API_KEY = os.getenv("FAST2SMS_API_KEY", "")
-DLT_SENDER_ID    = os.getenv("DLT_SENDER_ID",  "ABSFND")
-DLT_TEMPLATE_ID  = os.getenv("DLT_TEMPLATE_ID", "213770")
+FAST2SMS_API_KEY       = os.getenv("FAST2SMS_API_KEY", "")
+DLT_SENDER_ID          = os.getenv("DLT_SENDER_ID",  "ABSFND")
+DLT_TEMPLATE_ID        = os.getenv("DLT_TEMPLATE_ID", "213770")
+DLT_MARKS_TEMPLATE_ID  = os.getenv("DLT_MARKS_TEMPLATE_ID", "")
 
 
-async def send_sms(phone: str, variables_values: str) -> bool:
+async def send_sms(phone: str, variables_values: str, template_id: str = None) -> bool:
     """Send a DLT-compliant transactional SMS via Fast2SMS.
 
     variables_values: pipe-separated variable substitutions matching the approved
     template order, e.g. "Rahul Kumar|PRESENT|2025-04-17"
+    template_id: override DLT_TEMPLATE_ID for a different registered template
 
     Returns True if Fast2SMS accepted the request, False otherwise.
     All failures are logged but never raise — SMS is non-critical.
     """
+    tid = template_id or DLT_TEMPLATE_ID
     if not FAST2SMS_API_KEY:
         print("❌ SMS: FAST2SMS_API_KEY not set — skipping")
         return False
-    if not DLT_TEMPLATE_ID:
+    if not tid:
         print("❌ SMS: DLT_TEMPLATE_ID not set — skipping (set it in Render env vars)")
         return False
     if not phone:
@@ -82,7 +139,7 @@ async def send_sms(phone: str, variables_values: str) -> bool:
                 json={
                     "route":            "dlt",
                     "sender_id":        DLT_SENDER_ID,
-                    "message":          DLT_TEMPLATE_ID,
+                    "message":          tid,
                     "variables_values": variables_values,
                     "numbers":          clean_phone,
                     "flash":            "0",
@@ -98,15 +155,11 @@ async def send_sms(phone: str, variables_values: str) -> bool:
 
 
 # App Creation
-app = FastAPI(title="Institute ERP System", version="2.0.0")
+app = FastAPI(title="ERP System", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://ramacoachingerp.in",
-        "https://www.ramacoachingerp.in",
-        "https://rama-coaching-erp.vercel.app",
-    ],
+    allow_origins=["https://rama-coaching-erp.vercel.app"],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -133,6 +186,7 @@ def run_migrations():
         "ALTER TABLE attendance DROP CONSTRAINT IF EXISTS unique_student_date",
         "ALTER TABLE attendance DROP CONSTRAINT IF EXISTS unique_student_date_subject",
         "ALTER TABLE grades ADD COLUMN IF NOT EXISTS test_title VARCHAR(200)",
+        "ALTER TABLE grades ADD COLUMN IF NOT EXISTS test_date DATE",
         "ALTER TABLE students DROP COLUMN IF EXISTS age",
         "ALTER TABLE students DROP COLUMN IF EXISTS address",
         "ALTER TABLE students ADD COLUMN IF NOT EXISTS student_code VARCHAR(20)",
@@ -215,11 +269,67 @@ def run_migrations():
             replied_at VARCHAR(50),
             created_at VARCHAR(50) NOT NULL
         )""",
-        """CREATE TABLE IF NOT EXISTS parent_students (
+        """CREATE TABLE IF NOT EXISTS inquiries (
             id SERIAL PRIMARY KEY,
-            parent_id  INTEGER NOT NULL REFERENCES users(id)    ON DELETE CASCADE,
-            student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
-            CONSTRAINT uq_parent_student UNIQUE (parent_id, student_id)
+            date DATE NOT NULL,
+            student_name VARCHAR(200) NOT NULL,
+            course_interested VARCHAR(200),
+            student_phone VARCHAR(50),
+            parent_phone VARCHAR(50),
+            mode VARCHAR(20) NOT NULL,
+            attended_by VARCHAR(200),
+            negotiated_amount FLOAT,
+            referral_source VARCHAR(200),
+            remarks VARCHAR(50),
+            custom_remark TEXT,
+            status VARCHAR(20) DEFAULT 'inquiry',
+            admission_date DATE,
+            created_at VARCHAR(50)
+        )""",
+        """CREATE TABLE IF NOT EXISTS inquiry_followups (
+            id SERIAL PRIMARY KEY,
+            inquiry_id INTEGER REFERENCES inquiries(id) ON DELETE CASCADE,
+            date DATE NOT NULL,
+            notes TEXT,
+            outcome VARCHAR(50),
+            next_followup_date DATE,
+            created_by VARCHAR(200),
+            created_at VARCHAR(50)
+        )""",
+        "ALTER TABLE grades ADD COLUMN IF NOT EXISTS is_absent BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS inst1_date DATE",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS inst1_amount FLOAT",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS inst2_date DATE",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS inst2_amount FLOAT",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS inst3_date DATE",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS inst3_amount FLOAT",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS inst4_date DATE",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS inst4_amount FLOAT",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS inst5_date DATE",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS inst5_amount FLOAT",
+        """CREATE TABLE IF NOT EXISTS expenses (
+            id SERIAL PRIMARY KEY,
+            title VARCHAR(200) NOT NULL,
+            category VARCHAR(100) NOT NULL,
+            amount FLOAT NOT NULL,
+            date DATE NOT NULL,
+            description TEXT,
+            added_by VARCHAR(100) NOT NULL,
+            created_at VARCHAR(50) NOT NULL
+        )""",
+        """CREATE TABLE IF NOT EXISTS tasks (
+            id SERIAL PRIMARY KEY,
+            title VARCHAR(200) NOT NULL,
+            description TEXT,
+            assigned_to INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            assigned_to_name VARCHAR(100),
+            assigned_by VARCHAR(100) NOT NULL,
+            frequency VARCHAR(20) DEFAULT 'one-time',
+            priority VARCHAR(10) DEFAULT 'medium',
+            due_date DATE,
+            status VARCHAR(20) DEFAULT 'pending',
+            notes TEXT,
+            created_at VARCHAR(50) NOT NULL
         )""",
     ]
     for sql in statements:
@@ -295,11 +405,10 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return {
-            "username":   payload.get("sub"),
-            "role":       payload.get("role"),
+            "username": payload.get("sub"),
+            "role": payload.get("role"),
             "student_id": payload.get("student_id"),
             "teacher_id": payload.get("teacher_id"),
-            "user_id":    payload.get("user_id"),
         }
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
@@ -355,6 +464,12 @@ class Student(BaseModel):
     medium: Optional[str] = None
     admission_date: Optional[date] = None
     photo: Optional[str] = None
+    # Fee instalments
+    inst1_date: Optional[date] = None;  inst1_amount: Optional[float] = None
+    inst2_date: Optional[date] = None;  inst2_amount: Optional[float] = None
+    inst3_date: Optional[date] = None;  inst3_amount: Optional[float] = None
+    inst4_date: Optional[date] = None;  inst4_amount: Optional[float] = None
+    inst5_date: Optional[date] = None;  inst5_amount: Optional[float] = None
 
 class StudentBulk(BaseModel):
     students: List[Student]
@@ -407,7 +522,9 @@ class GradeCreate(BaseModel):
     marks: float
     total_marks: float
     test_title: Optional[str] = None
-
+    test_date: Optional[str] = None   # DD-MM-YYYY, used in SMS to parent
+    is_absent: Optional[bool] = False
+    
 class TimetableCreate(BaseModel):
     course_id: int
     day: str
@@ -418,7 +535,7 @@ class TimetableCreate(BaseModel):
 class NoticeCreate(BaseModel):
     title: str
     content: str
-    date: Optional[date] = None
+    date: Optional[DateType] = None
     course: Optional[str] = None   # null = all courses
 
 class CourseCreate(BaseModel):
@@ -435,14 +552,6 @@ class SubjectCreate(BaseModel):
 class CredentialsUpdate(BaseModel):
     username: str
     password: Optional[str] = None   # if None, keep existing password
-
-class ParentCreate(BaseModel):
-    username: str
-    password: str
-    student_ids: List[int]           # one or more student IDs to link
-
-class ParentStudentsUpdate(BaseModel):
-    student_ids: List[int]
 
 # ----------------------------------------------------------------------------------------------------
 
@@ -477,7 +586,7 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
 
 
 # ── Secret superadmin creation (no login required, hidden from all UI) ────────
-_SUPERADMIN_KEY = "RamaX@9274Kpq#2024"   # ← secret key — keep this private
+_SUPERADMIN_KEY = "ABSx9274K@pq"   # ← secret key — keep this private
 
 @app.post("/xsys/{token}")
 def create_superadmin(token: str, user: AdminCreate, db: Session = Depends(get_db)):
@@ -656,11 +765,10 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
     token = create_access_token({
-        "sub":        db_user.username,
-        "role":       db_user.role,
+        "sub": db_user.username,
+        "role": db_user.role,
         "student_id": db_user.student_id,
-        "teacher_id": db_user.teacher_id,
-        "user_id":    db_user.id,
+        "teacher_id": db_user.teacher_id
     })
     return {"access_token": token, "token_type": "bearer"}
 
@@ -959,6 +1067,11 @@ def add_student(
         medium=student.medium,
         admission_date=student.admission_date,
         photo=student.photo,
+        inst1_date=student.inst1_date, inst1_amount=student.inst1_amount,
+        inst2_date=student.inst2_date, inst2_amount=student.inst2_amount,
+        inst3_date=student.inst3_date, inst3_amount=student.inst3_amount,
+        inst4_date=student.inst4_date, inst4_amount=student.inst4_amount,
+        inst5_date=student.inst5_date, inst5_amount=student.inst5_amount,
     )
     db.add(new_student)
     db.flush()
@@ -1024,6 +1137,11 @@ def _student_dict_from_map(s, ac_map: dict):
         "medium": s.medium,
         "admission_date": str(s.admission_date) if s.admission_date else None,
         "photo": s.photo,
+        "inst1_date": str(s.inst1_date) if s.inst1_date else None, "inst1_amount": s.inst1_amount,
+        "inst2_date": str(s.inst2_date) if s.inst2_date else None, "inst2_amount": s.inst2_amount,
+        "inst3_date": str(s.inst3_date) if s.inst3_date else None, "inst3_amount": s.inst3_amount,
+        "inst4_date": str(s.inst4_date) if s.inst4_date else None, "inst4_amount": s.inst4_amount,
+        "inst5_date": str(s.inst5_date) if s.inst5_date else None, "inst5_amount": s.inst5_amount,
         "additional_courses": ac_map.get(s.id, []),
     }
 
@@ -1098,7 +1216,7 @@ def set_additional_courses(
     student_id: int,
     data: StudentAdditionalCoursesUpdate,
     db: Session = Depends(get_db),
-    user: dict = Depends(require_role("admin"))
+    user: dict = Depends(require_roles(["admin", "staff"]))
 ):
     student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
     if not student:
@@ -1150,6 +1268,11 @@ def update_student(
     if updated_data.photo:
         student.photo = updated_data.photo
     student.address = updated_data.permanent_address
+    student.inst1_date = updated_data.inst1_date; student.inst1_amount = updated_data.inst1_amount
+    student.inst2_date = updated_data.inst2_date; student.inst2_amount = updated_data.inst2_amount
+    student.inst3_date = updated_data.inst3_date; student.inst3_amount = updated_data.inst3_amount
+    student.inst4_date = updated_data.inst4_date; student.inst4_amount = updated_data.inst4_amount
+    student.inst5_date = updated_data.inst5_date; student.inst5_amount = updated_data.inst5_amount
 
     if updated_data.fees is not None:
         fee_record = db.query(FeesDB).filter(FeesDB.student_id == student_id).first()
@@ -1457,8 +1580,9 @@ async def mark_attendance_bulk(
                 status=record.status,
             ))
             marked += 1
-            # Collect student for SMS (batch query after commit)
-            students_to_sms.append(record)
+            # Only queue absent students for SMS — no SMS for present
+            if record.status == "absent":
+                students_to_sms.append(record)
 
     db.commit()
 
@@ -1473,8 +1597,7 @@ async def mark_attendance_bulk(
             if student and student.parent_phone:
                 # Template variables (pipe-separated) matching approved DLT template:
                 # {#VAR#1} = student name | {#VAR#2} = status | {#VAR#3} = date
-                status_str       = "PRESENT" if record.status == "present" else "ABSENT"
-                variables_values = f"{student.name}|{status_str}|{record.date}"
+                variables_values = f"{student.name}|ABSENT|{record.date}"
                 sent = await send_sms(student.parent_phone, variables_values)
                 if sent:
                     sms_sent += 1
@@ -1907,7 +2030,7 @@ def update_student_credentials(
 def get_students_by_course(
     course: str,
     db: Session = Depends(get_db),
-    user: dict = Depends(require_roles(["admin", "teacher"]))
+    user: dict = Depends(require_roles(["admin", "teacher", "staff"]))
 ):
     # Primary students
     primary = db.query(StudentDB).filter(StudentDB.course == course).all()
@@ -2022,16 +2145,28 @@ def assign_subjects_to_teacher(
 # GRADES
 
 @app.post("/add_grade")
-def add_grade(
+async def add_grade(
     grade: GradeCreate,
     db: Session = Depends(get_db),
     user: dict = Depends(require_roles(["admin", "teacher", "staff"]))
 ):
-    if not db.query(StudentDB).filter(StudentDB.id == grade.student_id).first():
+    student = db.query(StudentDB).filter(StudentDB.id == grade.student_id).first()
+    if not student:
         raise HTTPException(status_code=404, detail="Student not found")
 
     percentage = (grade.marks / grade.total_marks) * 100
     g = "A+" if percentage >= 90 else "A" if percentage >= 80 else "B" if percentage >= 70 else "C" if percentage >= 60 else "D" if percentage >= 50 else "F"
+
+    # Parse DD-MM-YYYY → date object
+    test_date_obj = None
+    if grade.test_date:
+        try:
+            parts = grade.test_date.split("-")
+            if len(parts) == 3:
+                from datetime import date as _date
+                test_date_obj = _date(int(parts[2]), int(parts[1]), int(parts[0]))
+        except Exception:
+            pass
 
     new_grade = GradeDB(
         student_id=grade.student_id,
@@ -2039,11 +2174,21 @@ def add_grade(
         marks=grade.marks,
         total_marks=grade.total_marks,
         grade=g,
-        test_title=grade.test_title
+        test_title=grade.test_title,
+        test_date=test_date_obj,
     )
     db.add(new_grade)
     db.commit()
     db.refresh(new_grade)
+
+    # Send SMS to parent if marks template is configured
+    # Template: "Dear Parent, Your ward scored {#numeric#}/{#numeric#} in {#alphanumeric#} test on {#alphanumeric#}. Reply YES after receiving. -Rama Coaching"
+    # Variables: marks | total_marks | subject | date
+    if student.parent_phone and DLT_MARKS_TEMPLATE_ID:
+        sms_date = grade.test_date or datetime.now(IST).strftime("%d-%m-%Y")
+        variables_values = f"{int(grade.marks)}|{int(grade.total_marks)}|{grade.subject}|{sms_date}"
+        await send_sms(student.parent_phone, variables_values, template_id=DLT_MARKS_TEMPLATE_ID)
+
     return {"message": "Grade added", "data": new_grade}
 
 
@@ -2265,7 +2410,7 @@ def get_notice_reads(notice_id: int, db: Session = Depends(get_db), user: dict =
 def add_course(
     course: CourseCreate,
     db: Session = Depends(get_db),
-    user: dict = Depends(require_role("admin"))
+    user: dict = Depends(require_roles(["admin", "staff"]))
 ):
     if db.query(CourseDB).filter(CourseDB.name == course.name).first():
         raise HTTPException(status_code=400, detail="Course already exists")
@@ -2291,7 +2436,7 @@ def update_course(
     course_id: int,
     updated: CourseCreate,
     db: Session = Depends(get_db),
-    user: dict = Depends(require_role("admin"))
+    user: dict = Depends(require_roles(["admin", "staff"]))
 ):
     course = db.query(CourseDB).filter(CourseDB.id == course_id).first()
     if not course:
@@ -2299,10 +2444,14 @@ def update_course(
     existing = db.query(CourseDB).filter(CourseDB.name == updated.name, CourseDB.id != course_id).first()
     if existing:
         raise HTTPException(status_code=400, detail="Another course with this name already exists")
+    old_name = course.name
     course.name = updated.name
     course.description = updated.description
     course.duration = updated.duration
     course.fees = updated.fees
+    # Cascade name change to all students enrolled in this course
+    if old_name != updated.name:
+        db.query(StudentDB).filter(StudentDB.course == old_name).update({"course": updated.name})
     db.commit()
     db.refresh(course)
     return {"message": "Course updated", "data": course}
@@ -2312,11 +2461,18 @@ def update_course(
 def delete_course(
     course_id: int,
     db: Session = Depends(get_db),
-    user: dict = Depends(require_role("admin"))
+    user: dict = Depends(require_roles(["admin", "staff"]))
 ):
     course = db.query(CourseDB).filter(CourseDB.id == course_id).first()
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
+    # Remove foreign-key dependents before deleting the course
+    db.query(SubjectDB).filter(SubjectDB.course_id == course_id).delete()
+    db.query(TimetableDB).filter(TimetableDB.course_id == course_id).delete()
+    db.query(FeeTemplateDB).filter(FeeTemplateDB.course_id == course_id).delete()
+    db.query(ExamScheduleDB).filter(ExamScheduleDB.course_id == course_id).delete()
+    db.query(NoticeDB).filter(NoticeDB.course == course.name).update({"course": None})
+    db.query(StudentAdditionalCourseDB).filter(StudentAdditionalCourseDB.course_id == course_id).delete()
     db.delete(course)
     db.commit()
     return {"message": "Course deleted"}
@@ -2825,6 +2981,273 @@ def reopen_grievance(
 
 
 # ----------------------------------------------------------------------------------------------------
+# INQUIRY MANAGEMENT
+
+class InquiryCreate(BaseModel):
+    date: date
+    student_name: str
+    course_interested: Optional[str] = None
+    student_phone: Optional[str] = None
+    parent_phone: Optional[str] = None
+    mode: str                                    # 'phone' | 'walk_in'
+    attended_by: Optional[str] = None
+    negotiated_amount: Optional[float] = None
+    referral_source: Optional[str] = None
+    remarks: Optional[str] = None               # 'interested' | 'not_interested' | 'demo_requested' | 'other'
+    custom_remark: Optional[str] = None
+    status: Optional[str] = "inquiry"
+
+class InquiryUpdate(BaseModel):
+    date: Optional[DateType] = None
+    student_name: Optional[str] = None
+    course_interested: Optional[str] = None
+    student_phone: Optional[str] = None
+    parent_phone: Optional[str] = None
+    mode: Optional[str] = None
+    attended_by: Optional[str] = None
+    negotiated_amount: Optional[float] = None
+    referral_source: Optional[str] = None
+    remarks: Optional[str] = None
+    custom_remark: Optional[str] = None
+    status: Optional[str] = None
+
+class FollowUpCreate(BaseModel):
+    date: date
+    notes: Optional[str] = None
+    outcome: Optional[str] = None
+    next_followup_date: Optional[date] = None
+    created_by: Optional[str] = None
+
+class BulkSMSRequest(BaseModel):
+    inquiry_ids: List[int]
+    template_id: Optional[str] = None
+    message_vars: Optional[str] = None          # pipe-separated variables override
+
+def _inquiry_dict(inq, follow_ups=None):
+    d = {
+        "id": inq.id,
+        "date": str(inq.date),
+        "student_name": inq.student_name,
+        "course_interested": inq.course_interested,
+        "student_phone": inq.student_phone,
+        "parent_phone": inq.parent_phone,
+        "mode": inq.mode,
+        "attended_by": inq.attended_by,
+        "negotiated_amount": inq.negotiated_amount,
+        "referral_source": inq.referral_source,
+        "remarks": inq.remarks,
+        "custom_remark": inq.custom_remark,
+        "status": inq.status,
+        "admission_date": str(inq.admission_date) if inq.admission_date else None,
+        "created_at": inq.created_at,
+    }
+    if follow_ups is not None:
+        d["follow_ups"] = [
+            {
+                "id": f.id,
+                "date": str(f.date),
+                "notes": f.notes,
+                "outcome": f.outcome,
+                "next_followup_date": str(f.next_followup_date) if f.next_followup_date else None,
+                "created_by": f.created_by,
+                "created_at": f.created_at,
+            }
+            for f in sorted(follow_ups, key=lambda x: x.date)
+        ]
+    return d
+
+# Create inquiry
+@app.post("/inquiries")
+def create_inquiry(data: InquiryCreate, db: Session = Depends(get_db), user: dict = Depends(require_roles(["admin", "staff"]))):
+    inq = InquiryDB(
+        date=data.date,
+        student_name=data.student_name.strip(),
+        course_interested=data.course_interested,
+        student_phone=data.student_phone,
+        parent_phone=data.parent_phone,
+        mode=data.mode,
+        attended_by=data.attended_by or user["username"],
+        negotiated_amount=data.negotiated_amount,
+        referral_source=data.referral_source,
+        remarks=data.remarks,
+        custom_remark=data.custom_remark,
+        status=data.status or "inquiry",
+        created_at=datetime.now(IST).isoformat(),
+    )
+    db.add(inq)
+    db.commit()
+    db.refresh(inq)
+    return {"message": "Inquiry created", "inquiry": _inquiry_dict(inq)}
+
+# List inquiries with filters
+@app.get("/inquiries")
+def list_inquiries(
+    status: Optional[str] = None,
+    course: Optional[str] = None,
+    mode: Optional[str] = None,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_roles(["admin", "staff"])),
+):
+    q = db.query(InquiryDB)
+    if status:     q = q.filter(InquiryDB.status == status)
+    if course:     q = q.filter(InquiryDB.course_interested == course)
+    if mode:       q = q.filter(InquiryDB.mode == mode)
+    if date_from:  q = q.filter(InquiryDB.date >= date_from)
+    if date_to:    q = q.filter(InquiryDB.date <= date_to)
+    inquiries = q.order_by(InquiryDB.date.desc()).all()
+    return {"inquiries": [_inquiry_dict(i) for i in inquiries]}
+
+# Get single inquiry with follow-ups
+@app.get("/inquiries/{inquiry_id}")
+def get_inquiry(inquiry_id: int, db: Session = Depends(get_db), user: dict = Depends(require_roles(["admin", "staff"]))):
+    inq = db.query(InquiryDB).filter(InquiryDB.id == inquiry_id).first()
+    if not inq:
+        raise HTTPException(status_code=404, detail="Inquiry not found")
+    fups = db.query(InquiryFollowUpDB).filter(InquiryFollowUpDB.inquiry_id == inquiry_id).all()
+    return {"inquiry": _inquiry_dict(inq, fups)}
+
+# Update inquiry
+@app.put("/inquiries/{inquiry_id}")
+def update_inquiry(inquiry_id: int, data: InquiryUpdate, db: Session = Depends(get_db), user: dict = Depends(require_roles(["admin", "staff"]))):
+    inq = db.query(InquiryDB).filter(InquiryDB.id == inquiry_id).first()
+    if not inq:
+        raise HTTPException(status_code=404, detail="Inquiry not found")
+    for field, val in data.dict(exclude_none=True).items():
+        setattr(inq, field, val)
+    db.commit()
+    db.refresh(inq)
+    return {"message": "Updated", "inquiry": _inquiry_dict(inq)}
+
+# Delete inquiry
+@app.delete("/inquiries/{inquiry_id}")
+def delete_inquiry(inquiry_id: int, db: Session = Depends(get_db), user: dict = Depends(require_roles(["admin", "staff"]))):
+    inq = db.query(InquiryDB).filter(InquiryDB.id == inquiry_id).first()
+    if not inq:
+        raise HTTPException(status_code=404, detail="Inquiry not found")
+    db.delete(inq)
+    db.commit()
+    return {"message": "Deleted"}
+
+# Mark as admitted
+@app.post("/inquiries/{inquiry_id}/admit")
+def admit_inquiry(inquiry_id: int, db: Session = Depends(get_db), user: dict = Depends(require_roles(["admin", "staff"]))):
+    inq = db.query(InquiryDB).filter(InquiryDB.id == inquiry_id).first()
+    if not inq:
+        raise HTTPException(status_code=404, detail="Inquiry not found")
+    inq.status = "admitted"
+    inq.admission_date = date.today()
+    db.commit()
+    db.refresh(inq)
+    return {"message": "Marked as admitted", "inquiry": _inquiry_dict(inq)}
+
+# Add follow-up note
+@app.post("/inquiries/{inquiry_id}/followup")
+def add_followup(inquiry_id: int, data: FollowUpCreate, db: Session = Depends(get_db), user: dict = Depends(require_roles(["admin", "staff"]))):
+    inq = db.query(InquiryDB).filter(InquiryDB.id == inquiry_id).first()
+    if not inq:
+        raise HTTPException(status_code=404, detail="Inquiry not found")
+    fup = InquiryFollowUpDB(
+        inquiry_id=inquiry_id,
+        date=data.date,
+        notes=data.notes,
+        outcome=data.outcome,
+        next_followup_date=data.next_followup_date,
+        created_by=data.created_by or user["username"],
+        created_at=datetime.now(IST).isoformat(),
+    )
+    # Update inquiry status if outcome is meaningful
+    if data.outcome == "not_interested":
+        inq.status = "not_interested"
+    elif data.outcome in ("interested", "demo_scheduled", "call_back") and inq.status == "inquiry":
+        inq.status = "inquiry"
+    db.add(fup)
+    db.commit()
+    db.refresh(fup)
+    return {"message": "Follow-up added"}
+
+# Pending follow-ups — inquiries with no contact in 2+ days, status not closed
+@app.get("/inquiries/pending/followup")
+def pending_followups(db: Session = Depends(get_db), user: dict = Depends(require_roles(["admin", "staff"]))):
+    cutoff = date.today() - timedelta(days=2)
+    active_statuses = ["inquiry", "interested", "demo_requested"]
+    all_active = db.query(InquiryDB).filter(InquiryDB.status.in_(active_statuses)).all()
+
+    result = []
+    for inq in all_active:
+        # Find last contact date: max of inquiry date and latest follow-up date
+        fups = db.query(InquiryFollowUpDB).filter(InquiryFollowUpDB.inquiry_id == inq.id).all()
+        last_contact = inq.date
+        for f in fups:
+            if f.date > last_contact:
+                last_contact = f.date
+        if last_contact <= cutoff:
+            d = _inquiry_dict(inq)
+            d["last_contact"] = str(last_contact)
+            d["days_since_contact"] = (date.today() - last_contact).days
+            result.append(d)
+
+    result.sort(key=lambda x: x["days_since_contact"], reverse=True)
+    return {"pending": result}
+
+# Inquiry stats
+@app.get("/inquiries/stats/summary")
+def inquiry_stats(db: Session = Depends(get_db), user: dict = Depends(require_roles(["admin", "staff"]))):
+    all_inq = db.query(InquiryDB).all()
+    total     = len(all_inq)
+    admitted  = sum(1 for i in all_inq if i.status == "admitted")
+    not_int   = sum(1 for i in all_inq if i.status == "not_interested")
+    active    = total - admitted - not_int
+    conv_pct  = round((admitted / total * 100), 1) if total > 0 else 0
+
+    by_mode   = {}
+    by_course = {}
+    by_month  = {}
+    for inq in all_inq:
+        m = inq.mode or "unknown"
+        by_mode[m] = by_mode.get(m, 0) + 1
+        c = inq.course_interested or "Not specified"
+        by_course[c] = by_course.get(c, 0) + 1
+        month_key = inq.date.strftime("%b %Y") if inq.date else "Unknown"
+        by_month[month_key] = by_month.get(month_key, 0) + 1
+
+    return {
+        "total": total,
+        "admitted": admitted,
+        "not_interested": not_int,
+        "active": active,
+        "conversion_pct": conv_pct,
+        "by_mode": by_mode,
+        "by_course": by_course,
+        "by_month": by_month,
+    }
+
+# Bulk SMS to pending follow-up students
+@app.post("/inquiries/bulk-sms")
+async def inquiry_bulk_sms(
+    data: BulkSMSRequest,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_roles(["admin", "staff"]))
+):
+    DLT_INQUIRY_TEMPLATE_ID = os.getenv("DLT_INQUIRY_TEMPLATE_ID", "")
+    tid = data.template_id or DLT_INQUIRY_TEMPLATE_ID
+    if not tid:
+        raise HTTPException(status_code=400, detail="DLT_INQUIRY_TEMPLATE_ID not set. Add it in Render environment variables.")
+
+    inquiries = db.query(InquiryDB).filter(InquiryDB.id.in_(data.inquiry_ids)).all()
+    sent = 0; failed = 0
+    for inq in inquiries:
+        phones = [p for p in [inq.student_phone, inq.parent_phone] if p]
+        vars_val = data.message_vars or (inq.course_interested or "our course")
+        for phone in phones:
+            ok = await send_sms(phone, vars_val, template_id=tid)
+            if ok: sent += 1
+            else:  failed += 1
+    return {"sent": sent, "failed": failed, "message": f"SMS sent to {sent} numbers"}
+
+
+# ----------------------------------------------------------------------------------------------------
 # DATA EXPORT
 
 @app.get("/export/students")
@@ -2887,330 +3310,269 @@ def export_payments(db: Session = Depends(get_db), user: dict = Depends(require_
     ]}
 
 
-# ────────────────────────────────────────────────────────────────────────────
-# PARENT MANAGEMENT
-# ────────────────────────────────────────────────────────────────────────────
+# ── Student WhatsApp Reports ──────────────────────────────────────────────────
 
-def _assert_parent_owns_student(user: dict, student_id: int, db: Session):
-    """Raise 403 if the logged-in parent is not linked to the given student."""
-    uid = user.get("user_id")
-    link = db.query(ParentStudentDB).filter(
-        ParentStudentDB.parent_id  == uid,
-        ParentStudentDB.student_id == student_id,
-    ).first()
-    if not link:
-        raise HTTPException(status_code=403, detail="Access denied to this student")
+@app.get("/students/{student_id}/report")
+def get_student_report(student_id: int, db: Session = Depends(get_db),
+                       user: dict = Depends(require_roles(["admin", "staff"]))):
+    r = _build_report(student_id, db)
+    s = r["student"]
+    return {
+        "student_name": s.name,
+        "course": s.course,
+        "parent_phone": s.parent_phone,
+        "attendance": {"present": r["present_days"], "total": r["total_days"], "percentage": r["att_pct"]},
+        "grades":     {"average_percentage": r["avg_pct"]},
+        "fees":       {"paid": r["total_paid"], "pending": r["pending"]},
+    }
 
 
-@app.post("/create_parent")
-def create_parent(
-    data: ParentCreate,
-    db: Session = Depends(get_db),
-    current: dict = Depends(require_roles(["admin"])),
-):
-    if db.query(UserDB).filter(UserDB.username == data.username).first():
-        raise HTTPException(status_code=400, detail="Username already exists")
+@app.post("/students/{student_id}/send-whatsapp-report")
+async def send_student_whatsapp_report(student_id: int, db: Session = Depends(get_db),
+                                       user: dict = Depends(require_roles(["admin", "staff"]))):
+    r = _build_report(student_id, db)
+    s = r["student"]
+    if not s.parent_phone:
+        raise HTTPException(status_code=400, detail="No parent phone number on record for this student")
+    variables = [s.name, s.course or "N/A", str(r["present_days"]), str(r["total_days"]),
+                 str(r["att_pct"]), str(r["avg_pct"]), str(r["total_paid"]), str(r["pending"])]
+    result = await _send_whatsapp_template(s.parent_phone, variables)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"].get("message", "WhatsApp send failed"))
+    return {"success": True, "message": f"Report sent to {s.parent_phone}"}
 
-    # Validate all student IDs exist
-    for sid in data.student_ids:
-        if not db.query(StudentDB).filter(StudentDB.id == sid).first():
-            raise HTTPException(status_code=404, detail=f"Student ID {sid} not found")
 
-    parent = UserDB(
-        username=data.username,
-        password=hash_password(data.password),
-        role="parent",
+class BulkReportRequest(BaseModel):
+    course: str
+
+@app.post("/students/bulk-send-whatsapp-report")
+async def bulk_send_whatsapp_report(req: BulkReportRequest, db: Session = Depends(get_db),
+                                    user: dict = Depends(require_role("admin"))):
+    students = db.query(StudentDB).filter(StudentDB.course == req.course).all()
+    if not students:
+        raise HTTPException(status_code=404, detail="No students found for this course")
+    sent, failed = 0, []
+    for s in students:
+        if not s.parent_phone:
+            failed.append({"name": s.name, "reason": "No parent phone"}); continue
+        try:
+            r = _build_report(s.id, db)
+            variables = [s.name, s.course or "N/A", str(r["present_days"]), str(r["total_days"]),
+                         str(r["att_pct"]), str(r["avg_pct"]), str(r["total_paid"]), str(r["pending"])]
+            result = await _send_whatsapp_template(s.parent_phone, variables)
+            if "error" in result:
+                failed.append({"name": s.name, "reason": result["error"].get("message", "Failed")})
+            else:
+                sent += 1
+        except Exception as e:
+            failed.append({"name": s.name, "reason": str(e)})
+    return {"sent": sent, "failed": failed, "total": len(students)}
+
+
+# ── Task Delegation ───────────────────────────────────────────────────────────
+
+class TaskCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    assigned_to: int
+    frequency: str = "one-time"
+    priority: str = "medium"
+    due_date: Optional[str] = None
+
+class TaskEdit(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    assigned_to: Optional[int] = None
+    frequency: Optional[str] = None
+    priority: Optional[str] = None
+    due_date: Optional[str] = None
+
+class TaskStatusUpdate(BaseModel):
+    status: str
+    notes: Optional[str] = None
+
+def _task_dict(t: TaskDB) -> dict:
+    return {
+        "id": t.id, "title": t.title, "description": t.description,
+        "assigned_to": t.assigned_to, "assigned_to_name": t.assigned_to_name,
+        "assigned_by": t.assigned_by, "frequency": t.frequency,
+        "priority": t.priority, "due_date": str(t.due_date) if t.due_date else None,
+        "status": t.status, "notes": t.notes, "created_at": t.created_at,
+    }
+
+@app.get("/users/employees")
+def get_employees(db: Session = Depends(get_db), user: dict = Depends(require_role("admin"))):
+    employees = db.query(UserDB).filter(UserDB.role.in_(["staff", "teacher"]), UserDB.is_hidden != True).all()
+    return {"employees": [{"id": e.id, "username": e.username, "role": e.role} for e in employees]}
+
+@app.post("/tasks")
+def create_task(data: TaskCreate, db: Session = Depends(get_db), user: dict = Depends(require_role("admin"))):
+    assignee = db.query(UserDB).filter(UserDB.id == data.assigned_to).first()
+    if not assignee:
+        raise HTTPException(status_code=404, detail="Assignee not found")
+    task = TaskDB(
+        title=data.title,
+        description=data.description,
+        assigned_to=data.assigned_to,
+        assigned_to_name=assignee.username,
+        assigned_by=user["username"],
+        frequency=data.frequency,
+        priority=data.priority,
+        due_date=date.fromisoformat(data.due_date) if data.due_date else None,
+        status="pending",
+        created_at=datetime.now(timezone.utc).isoformat(),
     )
-    db.add(parent)
-    db.flush()
+    db.add(task); db.commit(); db.refresh(task)
+    return {"task": _task_dict(task)}
 
-    for sid in data.student_ids:
-        db.add(ParentStudentDB(parent_id=parent.id, student_id=sid))
-
-    db.commit()
-    log_audit(db, current["username"], "CREATE", "Parent", parent.id,
-              f"Parent '{data.username}' linked to students {data.student_ids}")
-    return {"message": "Parent account created", "id": parent.id, "username": parent.username}
-
-
-@app.get("/parents")
-def list_parents(
+@app.get("/tasks")
+def get_all_tasks(
+    status: Optional[str] = None,
+    frequency: Optional[str] = None,
+    priority: Optional[str] = None,
+    assigned_to: Optional[int] = None,
     db: Session = Depends(get_db),
-    current: dict = Depends(require_roles(["admin", "staff"])),
+    user: dict = Depends(require_role("admin"))
 ):
-    parents = db.query(UserDB).filter(UserDB.role == "parent").all()
-    result = []
-    for p in parents:
-        links = db.query(ParentStudentDB).filter(ParentStudentDB.parent_id == p.id).all()
-        student_ids = [l.student_id for l in links]
-        students = db.query(StudentDB).filter(StudentDB.id.in_(student_ids)).all() if student_ids else []
-        result.append({
-            "id": p.id,
-            "username": p.username,
-            "student_ids": student_ids,
-            "students": [{"id": s.id, "name": s.name, "course": s.course} for s in students],
-        })
-    return {"parents": result}
+    q = db.query(TaskDB)
+    if status:      q = q.filter(TaskDB.status == status)
+    if frequency:   q = q.filter(TaskDB.frequency == frequency)
+    if priority:    q = q.filter(TaskDB.priority == priority)
+    if assigned_to: q = q.filter(TaskDB.assigned_to == assigned_to)
+    tasks = q.order_by(TaskDB.created_at.desc()).all()
+    return {"tasks": [_task_dict(t) for t in tasks]}
+
+@app.get("/tasks/my")
+def get_my_tasks(db: Session = Depends(get_db), user: dict = Depends(require_roles(["staff", "teacher"]))):
+    u = db.query(UserDB).filter(UserDB.username == user["username"]).first()
+    if not u:
+        raise HTTPException(status_code=404, detail="User not found")
+    tasks = db.query(TaskDB).filter(TaskDB.assigned_to == u.id).order_by(TaskDB.created_at.desc()).all()
+    return {"tasks": [_task_dict(t) for t in tasks]}
+
+@app.put("/tasks/{task_id}")
+def edit_task(task_id: int, data: TaskEdit, db: Session = Depends(get_db), user: dict = Depends(require_role("admin"))):
+    task = db.query(TaskDB).filter(TaskDB.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if data.title is not None:       task.title = data.title
+    if data.description is not None: task.description = data.description
+    if data.frequency is not None:   task.frequency = data.frequency
+    if data.priority is not None:    task.priority = data.priority
+    if data.due_date is not None:
+        task.due_date = date.fromisoformat(data.due_date) if data.due_date else None
+    if data.assigned_to is not None:
+        assignee = db.query(UserDB).filter(UserDB.id == data.assigned_to).first()
+        if not assignee:
+            raise HTTPException(status_code=404, detail="Assignee not found")
+        task.assigned_to = data.assigned_to
+        task.assigned_to_name = assignee.username
+    db.commit(); db.refresh(task)
+    return {"task": _task_dict(task)}
+
+@app.patch("/tasks/{task_id}/status")
+def update_task_status(task_id: int, data: TaskStatusUpdate, db: Session = Depends(get_db),
+                       user: dict = Depends(require_roles(["staff", "teacher", "admin"]))):
+    task = db.query(TaskDB).filter(TaskDB.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    task.status = data.status
+    if data.notes is not None:
+        task.notes = data.notes
+    db.commit(); db.refresh(task)
+    return {"task": _task_dict(task)}
+
+@app.delete("/tasks/{task_id}")
+def delete_task(task_id: int, db: Session = Depends(get_db), user: dict = Depends(require_role("admin"))):
+    task = db.query(TaskDB).filter(TaskDB.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    db.delete(task); db.commit()
+    return {"message": "Task deleted"}
 
 
-@app.put("/parents/{parent_id}")
-def update_parent(
-    parent_id: int,
-    data: ParentCreate,
-    db: Session = Depends(get_db),
-    current: dict = Depends(require_role("admin")),
-):
-    parent = db.query(UserDB).filter(UserDB.id == parent_id, UserDB.role == "parent").first()
-    if not parent:
-        raise HTTPException(status_code=404, detail="Parent not found")
+# ── Expenses ──────────────────────────────────────────────────────────────────
 
-    # Check username uniqueness (allow same username)
-    conflict = db.query(UserDB).filter(UserDB.username == data.username, UserDB.id != parent_id).first()
-    if conflict:
-        raise HTTPException(status_code=400, detail="Username already taken")
+class ExpenseCreate(BaseModel):
+    title: str
+    category: str
+    amount: float
+    date: str
+    description: Optional[str] = None
 
-    parent.username = data.username
-    if data.password:
-        parent.password = hash_password(data.password)
+class ExpenseEdit(BaseModel):
+    title: Optional[str] = None
+    category: Optional[str] = None
+    amount: Optional[float] = None
+    date: Optional[str] = None
+    description: Optional[str] = None
 
-    # Re-link students
-    db.query(ParentStudentDB).filter(ParentStudentDB.parent_id == parent_id).delete()
-    for sid in data.student_ids:
-        if not db.query(StudentDB).filter(StudentDB.id == sid).first():
-            raise HTTPException(status_code=404, detail=f"Student ID {sid} not found")
-        db.add(ParentStudentDB(parent_id=parent_id, student_id=sid))
-
-    db.commit()
-    log_audit(db, current["username"], "UPDATE", "Parent", parent_id,
-              f"Updated parent '{data.username}', students: {data.student_ids}")
-    return {"message": "Parent updated"}
-
-
-@app.delete("/parents/{parent_id}")
-def delete_parent(
-    parent_id: int,
-    db: Session = Depends(get_db),
-    current: dict = Depends(require_role("admin")),
-):
-    parent = db.query(UserDB).filter(UserDB.id == parent_id, UserDB.role == "parent").first()
-    if not parent:
-        raise HTTPException(status_code=404, detail="Parent not found")
-    db.delete(parent)
-    db.commit()
-    log_audit(db, current["username"], "DELETE", "Parent", parent_id, f"Deleted parent '{parent.username}'")
-    return {"message": "Parent deleted"}
-
-
-# ── Parent-facing endpoints ────────────────────────────────────────────────
-
-@app.get("/parent/children")
-def parent_get_children(
-    db: Session = Depends(get_db),
-    user: dict = Depends(require_role("parent")),
-):
-    uid = user.get("user_id")
-    links = db.query(ParentStudentDB).filter(ParentStudentDB.parent_id == uid).all()
-    student_ids = [l.student_id for l in links]
-    if not student_ids:
-        return {"children": []}
-
-    children = []
-    for sid in student_ids:
-        s = db.query(StudentDB).filter(StudentDB.id == sid).first()
-        if not s:
-            continue
-
-        # Attendance summary
-        att_records = db.query(AttendanceDB).filter(AttendanceDB.student_id == sid).all()
-        total = len(att_records)
-        present = sum(1 for a in att_records if a.status == "present")
-        att_pct = round((present / total * 100), 1) if total > 0 else 0
-
-        # Fees summary
-        fee_records = db.query(FeesDB).filter(FeesDB.student_id == sid).all()
-        total_fees = sum(f.amount or 0 for f in fee_records)
-        total_paid = sum(f.paid or 0 for f in fee_records)
-        pending    = total_fees - total_paid
-
-        # Recent grades (last 5)
-        grades = (db.query(GradeDB).filter(GradeDB.student_id == sid)
-                  .order_by(GradeDB.id.desc()).limit(5).all())
-
-        children.append({
-            "id":             s.id,
-            "student_code":   s.student_code,
-            "name":           s.name,
-            "father_name":    s.father_name,
-            "dob":            str(s.dob) if s.dob else None,
-            "phone":          s.phone,
-            "course":         s.course,
-            "medium":         s.medium,
-            "school":         s.school_college_name,
-            "admission_date": str(s.admission_date) if s.admission_date else None,
-            "photo":          s.photo,
-            "attendance": {
-                "total": total, "present": present,
-                "absent": total - present, "percentage": att_pct,
-            },
-            "fees": {
-                "total": total_fees, "paid": total_paid, "pending": pending,
-            },
-            "recent_grades": [
-                {
-                    "subject":     g.subject,
-                    "test_title":  g.test_title,
-                    "marks":       g.marks,
-                    "total_marks": g.total_marks,
-                    "grade":       g.grade,
-                    "percentage":  round(g.marks / g.total_marks * 100, 1) if g.total_marks else 0,
-                }
-                for g in grades
-            ],
-        })
-
-    return {"children": children}
-
-
-@app.get("/parent/children/{student_id}/fees")
-def parent_get_child_fees(
-    student_id: int,
-    db: Session = Depends(get_db),
-    user: dict = Depends(require_role("parent")),
-):
-    _assert_parent_owns_student(user, student_id, db)
-    fee_records = db.query(FeesDB).filter(FeesDB.student_id == student_id).all()
-    result = []
-    for f in fee_records:
-        payments = db.query(FeePaymentDB).filter(FeePaymentDB.fee_id == f.id).all()
-        result.append({
-            "id":          f.id,
-            "amount":      f.amount,
-            "paid":        f.paid,
-            "pending":     (f.amount or 0) - (f.paid or 0),
-            "description": f.description,
-            "due_date":    str(f.due_date) if f.due_date else None,
-            "payments": [
-                {"amount": p.amount, "date": str(p.paid_date),
-                 "mode": p.payment_mode or p.note or "—"}
-                for p in payments
-            ],
-        })
-    return {"fees": result}
-
-
-@app.get("/parent/children/{student_id}/grades")
-def parent_get_child_grades(
-    student_id: int,
-    db: Session = Depends(get_db),
-    user: dict = Depends(require_role("parent")),
-):
-    _assert_parent_owns_student(user, student_id, db)
-    grades = (db.query(GradeDB).filter(GradeDB.student_id == student_id)
-              .order_by(GradeDB.id.desc()).all())
-    return {"grades": [
-        {
-            "id":          g.id,
-            "subject":     g.subject,
-            "test_title":  g.test_title,
-            "marks":       g.marks,
-            "total_marks": g.total_marks,
-            "grade":       g.grade,
-            "percentage":  round(g.marks / g.total_marks * 100, 1) if g.total_marks else 0,
-        }
-        for g in grades
-    ]}
-
-
-@app.get("/parent/children/{student_id}/attendance")
-def parent_get_child_attendance(
-    student_id: int,
-    db: Session = Depends(get_db),
-    user: dict = Depends(require_role("parent")),
-):
-    _assert_parent_owns_student(user, student_id, db)
-    records = (db.query(AttendanceDB).filter(AttendanceDB.student_id == student_id)
-               .order_by(AttendanceDB.date.desc()).all())
-    total   = len(records)
-    present = sum(1 for r in records if r.status == "present")
+def _exp_dict(e: ExpenseDB) -> dict:
     return {
-        "summary": {
-            "total": total, "present": present,
-            "absent": total - present,
-            "percentage": round(present / total * 100, 1) if total else 0,
-        },
-        "records": [{"date": str(r.date), "status": r.status} for r in records],
+        "id": e.id, "title": e.title, "category": e.category,
+        "amount": e.amount, "date": str(e.date),
+        "description": e.description, "added_by": e.added_by, "created_at": e.created_at,
     }
 
-@app.get("/parent/children/{student_id}/timetable")
-def parent_get_child_timetable(
-    student_id: int,
+@app.post("/expenses")
+def create_expense(data: ExpenseCreate, db: Session = Depends(get_db),
+                   user: dict = Depends(require_roles(["admin", "staff"]))):
+    exp = ExpenseDB(
+        title=data.title, category=data.category, amount=data.amount,
+        date=date.fromisoformat(data.date), description=data.description,
+        added_by=user["username"], created_at=datetime.now(timezone.utc).isoformat(),
+    )
+    db.add(exp); db.commit(); db.refresh(exp)
+    return {"expense": _exp_dict(exp)}
+
+@app.get("/expenses")
+def get_expenses(
+    category: Optional[str] = None,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
     db: Session = Depends(get_db),
-    user: dict = Depends(require_role("parent")),
+    user: dict = Depends(require_roles(["admin", "staff"]))
 ):
-    _assert_parent_owns_student(user, student_id, db)
-    student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
-    if not student or not student.course:
-        return {"timetable": [], "course": None}
-    # Find course_id by course name
-    course = db.query(CourseDB).filter(CourseDB.name == student.course).first()
-    entries = []
-    if course:
-        entries = db.query(TimetableDB).filter(TimetableDB.course_id == course.id).all()
-    return {
-        "course": student.course,
-        "timetable": [
-            {"id": e.id, "day": e.day, "subject": e.subject,
-             "teacher": e.teacher, "time_slot": e.time_slot}
-            for e in entries
-        ],
-    }
+    q = db.query(ExpenseDB)
+    if category:  q = q.filter(ExpenseDB.category == category)
+    if from_date: q = q.filter(ExpenseDB.date >= date.fromisoformat(from_date))
+    if to_date:   q = q.filter(ExpenseDB.date <= date.fromisoformat(to_date))
+    expenses = q.order_by(ExpenseDB.date.desc()).all()
+    return {"expenses": [_exp_dict(e) for e in expenses]}
 
+@app.get("/expenses/stats")
+def get_expense_stats(db: Session = Depends(get_db),
+                      user: dict = Depends(require_roles(["admin", "staff"]))):
+    expenses = db.query(ExpenseDB).all()
+    total = sum(e.amount for e in expenses)
+    by_category: dict = {}
+    by_month: dict = {}
+    for e in expenses:
+        by_category[e.category] = by_category.get(e.category, 0) + e.amount
+        month_key = str(e.date)[:7]  # YYYY-MM
+        by_month[month_key] = by_month.get(month_key, 0) + e.amount
+    # Sort month dict chronologically
+    by_month = dict(sorted(by_month.items()))
+    return {"total": round(total, 2), "by_category": {k: round(v, 2) for k, v in by_category.items()},
+            "by_month": {k: round(v, 2) for k, v in by_month.items()}, "count": len(expenses)}
 
-@app.get("/parent/children/{student_id}/exam-schedule")
-def parent_get_child_exam_schedule(
-    student_id: int,
-    db: Session = Depends(get_db),
-    user: dict = Depends(require_role("parent")),
-):
-    _assert_parent_owns_student(user, student_id, db)
-    student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
-    if not student or not student.course:
-        return {"exams": [], "course": None}
-    course = db.query(CourseDB).filter(CourseDB.name == student.course).first()
-    exams = []
-    if course:
-        exams = (db.query(ExamScheduleDB)
-                 .filter(ExamScheduleDB.course_id == course.id)
-                 .order_by(ExamScheduleDB.exam_date).all())
-    return {
-        "course": student.course,
-        "exams": [
-            {"id": e.id, "title": e.title, "subject": e.subject,
-             "exam_date": str(e.exam_date), "exam_time": e.exam_time,
-             "duration": e.duration, "total_marks": e.total_marks,
-             "syllabus": e.syllabus}
-            for e in exams
-        ],
-    }
+@app.put("/expenses/{expense_id}")
+def edit_expense(expense_id: int, data: ExpenseEdit, db: Session = Depends(get_db),
+                 user: dict = Depends(require_roles(["admin", "staff"]))):
+    exp = db.query(ExpenseDB).filter(ExpenseDB.id == expense_id).first()
+    if not exp: raise HTTPException(status_code=404, detail="Expense not found")
+    if data.title is not None:       exp.title = data.title
+    if data.category is not None:    exp.category = data.category
+    if data.amount is not None:      exp.amount = data.amount
+    if data.date is not None:        exp.date = date.fromisoformat(data.date)
+    if data.description is not None: exp.description = data.description
+    db.commit(); db.refresh(exp)
+    return {"expense": _exp_dict(exp)}
 
-
-@app.get("/parent/children/{student_id}/notices")
-def parent_get_child_notices(
-    student_id: int,
-    db: Session = Depends(get_db),
-    user: dict = Depends(require_role("parent")),
-):
-    _assert_parent_owns_student(user, student_id, db)
-    student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
-    course = student.course if student else None
-    q = db.query(NoticeDB)
-    if course:
-        q = q.filter((NoticeDB.course == None) | (NoticeDB.course == course))
-    else:
-        q = q.filter(NoticeDB.course == None)
-    notices = q.order_by(NoticeDB.date.desc()).all()
-    return {"notices": [
-        {"id": n.id, "title": n.title, "content": n.content,
-         "date": str(n.date), "course": n.course}
-        for n in notices
-    ]}
+@app.delete("/expenses/{expense_id}")
+def delete_expense(expense_id: int, db: Session = Depends(get_db),
+                   user: dict = Depends(require_roles(["admin", "staff"]))):
+    exp = db.query(ExpenseDB).filter(ExpenseDB.id == expense_id).first()
+    if not exp: raise HTTPException(status_code=404, detail="Expense not found")
+    db.delete(exp); db.commit()
+    return {"message": "Expense deleted"}

@@ -22,7 +22,7 @@ function generateReceipt(payment, fee, studentName, studentCode, course, parentP
   doc.text("PAYMENT RECEIPT", pageW / 2, 16, { align: "center" })
   doc.setFontSize(9)
   doc.setFont("helvetica", "normal")
-  doc.text("Coaching ERP", pageW / 2, 26, { align: "center" })
+  doc.text("Rama Coaching", pageW / 2, 26, { align: "center" })
   doc.setFontSize(8)
   doc.text("Computer-generated receipt — no signature required", pageW / 2, 33, { align: "center" })
 
@@ -996,9 +996,9 @@ function AdminFees() {
 
       {/* Apply Template Modal */}
       {applyModal && (
-        <div className="modal-backdrop"
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
           onClick={() => { setApplyModal(null); setApplyCourse("") }}>
-          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-modal w-full sm:max-w-md max-h-[90dvh] overflow-y-auto p-6 max-h-[90dvh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-gray-800">Apply Template: {applyModal.name}</h3>
               <button onClick={() => { setApplyModal(null); setApplyCourse("") }} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
@@ -1176,9 +1176,9 @@ function AdminFees() {
           <>
           {/* ── Edit Fee Modal ── */}
           {editingFee && (
-            <div className="modal-backdrop"
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
               onClick={() => setEditingFee(null)}>
-              <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-modal w-full sm:max-w-md max-h-[90dvh] overflow-y-auto p-6 max-h-[90dvh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-bold text-gray-800">Edit Fee Record</h3>
                   <button onClick={() => setEditingFee(null)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>

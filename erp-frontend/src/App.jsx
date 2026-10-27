@@ -1,44 +1,42 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
 import { useAuth } from "./context/AuthContext"
-import { lazy, Suspense } from "react"
 
-// ─── Eager (landing pages need instant load) ─────────────────
-import Login    from "./pages/Login"
+import Login from "./pages/Login"
 import Register from "./pages/Register"
-
-// ─── Lazy (loaded only when navigated to) ────────────────────
-const Dashboard          = lazy(() => import("./pages/Dashboard"))
-const Students           = lazy(() => import("./pages/Students"))
-const Attendance         = lazy(() => import("./pages/Attendance"))
-const Fees               = lazy(() => import("./pages/Fees"))
-const Teachers           = lazy(() => import("./pages/Teachers"))
-const Grades             = lazy(() => import("./pages/Grades"))
-const Timetable          = lazy(() => import("./pages/Timetable"))
-const Notices            = lazy(() => import("./pages/Notices"))
-const ImportStudents     = lazy(() => import("./pages/ImportStudents"))
-const Courses            = lazy(() => import("./pages/Courses"))
-const TeacherDashboard   = lazy(() => import("./pages/TeacherDashboard"))
-const StaffDashboard     = lazy(() => import("./pages/StaffDashboard"))
-const TeacherAttendance  = lazy(() => import("./pages/TeacherAttendance"))
-const TeacherStudents    = lazy(() => import("./pages/TeacherStudents"))
-const TeacherGrades      = lazy(() => import("./pages/TeacherGrades"))
-const AdminAccounts      = lazy(() => import("./pages/AdminAccounts"))
-const ExamSchedule       = lazy(() => import("./pages/ExamSchedule"))
-const AuditLog           = lazy(() => import("./pages/AuditLog"))
-const DataExport         = lazy(() => import("./pages/DataExport"))
-const AttendanceReport   = lazy(() => import("./pages/AttendanceReport"))
-const GrievanceManagement = lazy(() => import("./pages/GrievanceManagement"))
-const StudentGrievance   = lazy(() => import("./pages/StudentGrievance"))
-const ParentDashboard    = lazy(() => import("./pages/ParentDashboard"))
-const ParentManagement   = lazy(() => import("./pages/ParentManagement"))
+import Dashboard from "./pages/Dashboard"
+import Students from "./pages/Students"
+import Attendance from "./pages/Attendance"
+import Fees from "./pages/Fees"
+import Teachers from "./pages/Teachers"
+import Grades from "./pages/Grades"
+import Timetable from "./pages/Timetable"
+import Notices from "./pages/Notices"
+import ImportStudents from "./pages/ImportStudents"
+import Courses from "./pages/Courses"
+import TeacherDashboard from "./pages/TeacherDashboard"
+import StaffDashboard from "./pages/StaffDashboard"
+import TeacherAttendance from "./pages/TeacherAttendance"
+import TeacherStudents from "./pages/TeacherStudents"
+import TeacherGrades from "./pages/TeacherGrades"
+import AdminAccounts from "./pages/AdminAccounts"
+import ExamSchedule from "./pages/ExamSchedule"
+import AuditLog from "./pages/AuditLog"
+import DataExport from "./pages/DataExport"
+import AttendanceReport from "./pages/AttendanceReport"
+import GrievanceManagement from "./pages/GrievanceManagement"
+import StudentGrievance from "./pages/StudentGrievance"
+import Inquiry from "./pages/Inquiry"
+import Tasks from "./pages/Tasks"
+import MyTasks from "./pages/MyTasks"
+import Expenses from "./pages/Expenses"
 
 // ─── Loading Spinner ─────────────────────────────────────────
 function LoadingScreen() {
   return (
-    <div className="flex items-center justify-center min-h-screen bg-slate-50">
+    <div className="flex items-center justify-center min-h-screen bg-gray-50">
       <div className="text-center">
-        <div className="w-9 h-9 border-[3px] border-primary-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-        <p className="text-slate-400 text-sm font-medium">Loading…</p>
+        <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <p className="text-gray-500 text-sm">Loading...</p>
       </div>
     </div>
   )
@@ -60,9 +58,8 @@ function AdminRoute({ children }) {
   if (!user) return <Navigate to="/login" replace />
   if (user.role === "student") return <Navigate to="/student/dashboard" replace />
   if (user.role === "teacher") return <Navigate to="/teacher" replace />
-  if (user.role === "staff")   return <Navigate to="/staff/dashboard" replace />
-  if (user.role === "parent")  return <Navigate to="/parent/dashboard" replace />
-  if (user.role !== "admin")   return <Navigate to="/login" replace />
+  if (user.role === "staff") return <Navigate to="/staff/dashboard" replace />
+  if (user.role !== "admin") return <Navigate to="/login" replace />
   return children
 }
 
@@ -84,15 +81,6 @@ function TeacherRoute({ children }) {
   return children
 }
 
-// Parent only
-function ParentRoute({ children }) {
-  const { user, loading } = useAuth()
-  if (loading) return <LoadingScreen />
-  if (!user) return <Navigate to="/login" replace />
-  if (user.role !== "parent") return <Navigate to="/login" replace />
-  return children
-}
-
 // ✅ Redirect to dashboard if already logged in
 function PublicRoute({ children }) {
   const { user, loading } = useAuth()
@@ -100,8 +88,7 @@ function PublicRoute({ children }) {
   if (user) {
     if (user.role === "teacher") return <Navigate to="/teacher" replace />
     if (user.role === "student") return <Navigate to="/student/dashboard" replace />
-    if (user.role === "staff")   return <Navigate to="/staff/dashboard" replace />
-    if (user.role === "parent")  return <Navigate to="/parent/dashboard" replace />
+    if (user.role === "staff") return <Navigate to="/staff/dashboard" replace />
     return <Navigate to="/dashboard" replace />
   }
   return children
@@ -110,30 +97,27 @@ function PublicRoute({ children }) {
 // ─── 404 Page ────────────────────────────────────────────────
 function NotFound() {
   const { user } = useAuth()
-  const home =
-    user?.role === "teacher" ? "/teacher" :
-    user?.role === "student" ? "/student/dashboard" :
-    user?.role === "staff"   ? "/staff/dashboard" :
-    user?.role === "parent"  ? "/parent/dashboard" : "/dashboard"
   return (
-    <div className="flex items-center justify-center min-h-screen bg-slate-50">
-      <div className="text-center px-6 max-w-sm">
-        <p className="text-9xl font-black text-slate-100 select-none leading-none mb-4">404</p>
-        <p className="text-xl font-bold text-slate-800 mb-2">Page not found</p>
-        <p className="text-slate-500 text-sm mb-8">The page you're looking for doesn't exist or has been moved.</p>
-        <a href={home} className="btn-primary inline-flex">
+    <div className="flex items-center justify-center min-h-screen bg-gray-50">
+      <div className="text-center">
+        <p className="text-6xl font-bold text-gray-300 mb-4">404</p>
+        <p className="text-xl font-semibold text-gray-700 mb-2">Page not found</p>
+        <p className="text-gray-400 mb-6">The page you're looking for doesn't exist.</p>
+        <a
+          href={
+            user?.role === "teacher"
+              ? "/teacher"
+              : user?.role === "student"
+              ? "/student/dashboard"
+              : user?.role === "staff"
+              ? "/staff/dashboard"
+              : "/dashboard"
+          }
+          className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
+        >
           Go to Dashboard
         </a>
       </div>
-    </div>
-  )
-}
-
-// ─── Page Suspense fallback ──────────────────────────────────
-function PageLoader() {
-  return (
-    <div className="flex items-center justify-center min-h-screen bg-slate-50">
-      <div className="w-8 h-8 border-[3px] border-primary-600 border-t-transparent rounded-full animate-spin" />
     </div>
   )
 }
@@ -142,7 +126,6 @@ function PageLoader() {
 export default function App() {
   return (
     <BrowserRouter>
-      <Suspense fallback={<PageLoader />}>
       <Routes>
 
         {/* Public routes — redirect to dashboard if logged in */}
@@ -160,14 +143,17 @@ export default function App() {
         <Route path="/timetable" element={<AdminRoute><Timetable /></AdminRoute>} />
         <Route path="/notices" element={<AdminRoute><Notices /></AdminRoute>} />
         <Route path="/import" element={<AdminRoute><ImportStudents /></AdminRoute>} />
-        <Route path="/courses" element={<AdminRoute><Courses /></AdminRoute>} />
+        <Route path="/courses"       element={<AdminRoute><Courses /></AdminRoute>} />
+        <Route path="/staff/courses" element={<StaffRoute><Courses /></StaffRoute>} />
         <Route path="/admin-accounts" element={<AdminRoute><AdminAccounts /></AdminRoute>} />
         <Route path="/exam-schedule"  element={<AdminRoute><ExamSchedule /></AdminRoute>} />
         <Route path="/audit-log"           element={<AdminRoute><AuditLog /></AdminRoute>} />
         <Route path="/data-export"         element={<AdminRoute><DataExport /></AdminRoute>} />
         <Route path="/attendance-report"   element={<AdminRoute><AttendanceReport /></AdminRoute>} />
         <Route path="/grievances"           element={<AdminRoute><GrievanceManagement /></AdminRoute>} />
-        <Route path="/parents"              element={<AdminRoute><ParentManagement /></AdminRoute>} />
+        <Route path="/inquiries"            element={<AdminRoute><Inquiry /></AdminRoute>} />
+        <Route path="/tasks"                element={<AdminRoute><Tasks /></AdminRoute>} />
+        <Route path="/expenses"             element={<AdminRoute><Expenses /></AdminRoute>} />
 
         {/* Teacher routes */}
         <Route path="/teacher" element={<TeacherRoute><TeacherDashboard /></TeacherRoute>} />
@@ -176,7 +162,8 @@ export default function App() {
         <Route path="/teacher/grades" element={<TeacherRoute><TeacherGrades /></TeacherRoute>} />
         <Route path="/teacher/timetable" element={<TeacherRoute><Timetable /></TeacherRoute>} />
         <Route path="/teacher/exam-schedule" element={<TeacherRoute><ExamSchedule /></TeacherRoute>} />
-        <Route path="/teacher/notices" element={<TeacherRoute><Notices /></TeacherRoute>} />
+        <Route path="/teacher/notices"   element={<TeacherRoute><Notices /></TeacherRoute>} />
+        <Route path="/teacher/my-tasks" element={<TeacherRoute><MyTasks /></TeacherRoute>} />
 
         {/* Staff routes */}
         <Route path="/staff/dashboard"     element={<StaffRoute><StaffDashboard /></StaffRoute>} />
@@ -189,9 +176,9 @@ export default function App() {
         <Route path="/staff/import"             element={<StaffRoute><ImportStudents /></StaffRoute>} />
         <Route path="/staff/attendance-report"  element={<StaffRoute><AttendanceReport /></StaffRoute>} />
         <Route path="/staff/grievances"         element={<StaffRoute><GrievanceManagement /></StaffRoute>} />
-
-        {/* Parent routes */}
-        <Route path="/parent/dashboard" element={<ParentRoute><ParentDashboard /></ParentRoute>} />
+        <Route path="/staff/inquiries"          element={<StaffRoute><Inquiry /></StaffRoute>} />
+        <Route path="/staff/my-tasks"           element={<StaffRoute><MyTasks /></StaffRoute>} />
+        <Route path="/staff/expenses"           element={<StaffRoute><Expenses /></StaffRoute>} />
 
         {/* Student routes */}
         <Route path="/student/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
@@ -207,7 +194,6 @@ export default function App() {
         <Route path="*" element={<NotFound />} />
 
       </Routes>
-      </Suspense>
     </BrowserRouter>
   )
 }

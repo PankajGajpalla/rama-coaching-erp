@@ -2,7 +2,7 @@ import axios from "axios";
 
 // ✅ Use environment variable for base URL
 const API = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "http://localhost:8001",
+  baseURL: import.meta.env.VITE_API_URL || "https://rama-coaching-erp-vk2l.onrender.com",
 });
 
 // ✅ Attach token to every request
@@ -159,15 +159,35 @@ export const replyGrievanceAPI    = (id, data)        => API.put(`/grievances/${
 export const resolveGrievanceAPI  = (id)              => API.patch(`/grievances/${id}/resolve`)
 export const reopenGrievanceAPI   = (id)              => API.patch(`/grievances/${id}/reopen`)
 
-// ─── Parents ──────────────────────────────────────────────────
-export const createParentAPI             = (data)      => API.post("/create_parent", data)
-export const getParentsAPI               = ()          => API.get("/parents")
-export const updateParentAPI             = (id, data)  => API.put(`/parents/${id}`, data)
-export const deleteParentAPI             = (id)        => API.delete(`/parents/${id}`)
-export const getParentChildrenAPI        = ()          => API.get("/parent/children")
-export const getParentChildFeesAPI       = (sid)       => API.get(`/parent/children/${sid}/fees`)
-export const getParentChildGradesAPI     = (sid)       => API.get(`/parent/children/${sid}/grades`)
-export const getParentChildAttendanceAPI = (sid)       => API.get(`/parent/children/${sid}/attendance`)
-export const getParentChildTimetableAPI  = (sid)       => API.get(`/parent/children/${sid}/timetable`)
-export const getParentChildExamsAPI      = (sid)       => API.get(`/parent/children/${sid}/exam-schedule`)
-export const getParentChildNoticesAPI    = (sid)       => API.get(`/parent/children/${sid}/notices`)
+// ─── Expenses ────────────────────────────────────────────────────────────────
+export const createExpenseAPI  = (data)       => API.post("/expenses", data)
+export const getExpensesAPI    = (params={})  => API.get("/expenses", { params })
+export const getExpenseStatsAPI= ()           => API.get("/expenses/stats")
+export const editExpenseAPI    = (id, data)   => API.put(`/expenses/${id}`, data)
+export const deleteExpenseAPI  = (id)         => API.delete(`/expenses/${id}`)
+
+// ─── Tasks ───────────────────────────────────────────────────────────────────
+export const getEmployeesAPI      = ()           => API.get("/users/employees")
+export const createTaskAPI        = (data)       => API.post("/tasks", data)
+export const getAllTasksAPI        = (params={})  => API.get("/tasks", { params })
+export const getMyTasksAPI        = ()           => API.get("/tasks/my")
+export const editTaskAPI          = (id, data)   => API.put(`/tasks/${id}`, data)
+export const updateTaskStatusAPI  = (id, data)   => API.patch(`/tasks/${id}/status`, data)
+export const deleteTaskAPI        = (id)         => API.delete(`/tasks/${id}`)
+
+// ─── Student Reports (WhatsApp) ──────────────────────────────────────────────
+export const getStudentReportAPI       = (id)     => API.get(`/students/${id}/report`)
+export const sendStudentWhatsAppAPI    = (id)     => API.post(`/students/${id}/send-whatsapp-report`)
+export const bulkSendWhatsAppReportAPI = (course) => API.post("/students/bulk-send-whatsapp-report", { course })
+
+// ─── Inquiries ────────────────────────────────────────────────
+export const getInquiriesAPI        = (params = {})  => API.get("/inquiries", { params })
+export const getInquiryAPI          = (id)           => API.get(`/inquiries/${id}`)
+export const createInquiryAPI       = (data)         => API.post("/inquiries", data)
+export const updateInquiryAPI       = (id, data)     => API.put(`/inquiries/${id}`, data)
+export const deleteInquiryAPI       = (id)           => API.delete(`/inquiries/${id}`)
+export const admitInquiryAPI        = (id)           => API.post(`/inquiries/${id}/admit`)
+export const addFollowUpAPI         = (id, data)     => API.post(`/inquiries/${id}/followup`, data)
+export const getPendingFollowUpsAPI = ()             => API.get("/inquiries/pending/followup")
+export const getInquiryStatsAPI     = ()             => API.get("/inquiries/stats/summary")
+export const inquiryBulkSmsAPI      = (data)         => API.post("/inquiries/bulk-sms", data)

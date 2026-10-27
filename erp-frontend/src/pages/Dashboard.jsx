@@ -24,30 +24,12 @@ function daysOverdue(dueDateStr) {
   return Math.max(0, Math.floor((Date.now() - new Date(dueDateStr)) / 86400000))
 }
 
-// ─── Simple localStorage cache (stale-while-revalidate) ──────
-const CACHE_KEY = "erp_dashboard_cache"
-const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
-
-function readCache() {
-  try {
-    const raw = localStorage.getItem(CACHE_KEY)
-    if (!raw) return null
-    const { data, ts } = JSON.parse(raw)
-    if (Date.now() - ts > CACHE_TTL) return null
-    return data
-  } catch { return null }
-}
-function writeCache(data) {
-  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ data, ts: Date.now() })) } catch {}
-}
-
 // ─── Admin Dashboard ──────────────────────────────────────────
 function AdminDashboard() {
-  const cached = readCache()
-  const [stats, setStats]         = useState(cached?.stats ?? null)
-  const [charts, setCharts]       = useState(cached?.charts ?? null)
-  const [overdue, setOverdue]     = useState(cached?.overdue ?? [])
-  const [loading, setLoading]     = useState(!cached)       // skip spinner if cache hit
+  const [stats, setStats]         = useState(null)
+  const [charts, setCharts]       = useState(null)
+  const [overdue, setOverdue]     = useState([])
+  const [loading, setLoading]     = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError]         = useState("")
   const [showAllOverdue, setShowAllOverdue] = useState(false)
@@ -55,32 +37,29 @@ function AdminDashboard() {
 
   async function load(isRefresh = false) {
     if (isRefresh) setRefreshing(true)
-    else if (!readCache()) setLoading(true)
+    else setLoading(true)
     try {
       const [sRes, oRes, cRes] = await Promise.all([
         getDashboardSummaryAPI(),
         getOverdueFeesAPI().catch(() => ({ data: [] })),
         getDashboardChartsAPI().catch(() => ({ data: null })),
       ])
-      const newStats  = sRes.data
-      const newOverdue = Array.isArray(oRes.data) ? oRes.data : []
-      const newCharts = cRes.data
-      setStats(newStats)
-      setOverdue(newOverdue)
-      setCharts(newCharts)
+      setStats(sRes.data)
+      setOverdue(Array.isArray(oRes.data) ? oRes.data : [])
+      setCharts(cRes.data)
       setLastRefreshed(new Date())
-      writeCache({ stats: newStats, overdue: newOverdue, charts: newCharts })
     } catch (err) {
-      if (!stats) setError("Failed to load dashboard")
+      setError("Failed to load dashboard")
+      console.error(err)
     } finally {
       setLoading(false)
       setRefreshing(false)
     }
   }
 
-  // Show cache instantly, then refresh in background + every 2 min
+  // Initial load + auto-refresh every 2 minutes
   useEffect(() => {
-    load(!!cached)
+    load()
     const interval = setInterval(() => load(true), 2 * 60 * 1000)
     return () => clearInterval(interval)
   }, [])
@@ -106,23 +85,23 @@ function AdminDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="page-header">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800 mb-0.5">Admin Dashboard</h2>
-          <p className="text-slate-400 text-sm">Overview of Coaching ERP</p>
+          <h2 className="text-2xl font-bold text-slate-800 mb-1">Admin Dashboard</h2>
+          <p className="text-slate-400 text-sm">Overview of Rama Coaching</p>
         </div>
-        <div className="page-header-actions">
+        <div className="flex items-center gap-3 flex-shrink-0">
           {lastRefreshedLabel && (
-            <span className="text-xs text-slate-400 hidden sm:inline">Updated {lastRefreshedLabel}</span>
+            <span className="text-xs text-slate-400">Updated {lastRefreshedLabel}</span>
           )}
           <button
             onClick={() => load(true)}
             disabled={refreshing || loading}
             className="btn-ghost disabled:opacity-50 gap-1.5"
-            title="Refresh"
+            title="Refresh dashboard data"
           >
             <span className={refreshing ? "animate-spin inline-block" : ""}>↻</span>
-            <span className="hidden sm:inline">{refreshing ? "Refreshing…" : "Refresh"}</span>
+            {refreshing ? "Refreshing…" : "Refresh"}
           </button>
         </div>
       </div>
@@ -136,8 +115,8 @@ function AdminDashboard() {
         <StatCard label="Total Teachers"     value={stats.total_teachers ?? "—"}       color="purple" />
         <StatCard
           label="Today's Attendance"
-          value={stats.attendance_today?.pct != null ? stats.attendance_today.pct.toFixed(1) + "%" : "—"}
-          sub={stats.attendance_today?.present != null ? `${stats.attendance_today.present}P / ${stats.attendance_today.absent}A` : null}
+          value={stats.attendance_today_pct?.pct != null ? stats.attendance_today_pct.pct.toFixed(1) + "%" : "—"}
+          sub={stats.attendance_today_pct?.present != null ? `${stats.attendance_today_pct.present}P / ${stats.attendance_today_pct.absent}A` : null}
           color="blue"
         />
       </div>
@@ -455,7 +434,7 @@ function StudentDashboard({ studentId }) {
     <div className="space-y-6">
 
       {/* ── Welcome Banner ── */}
-      <div className="bg-gradient-to-r from-primary-600 to-indigo-700 rounded-2xl p-4 sm:p-6 text-white flex flex-col xs:flex-row items-start xs:items-center gap-4 sm:gap-5">
+      <div className="bg-gradient-to-r from-primary-600 to-indigo-700 rounded-2xl p-4 sm:p-6 text-white flex items-center gap-4 sm:gap-5">
         {p.photo ? (
           <img src={p.photo} alt={p.name} className="w-20 h-24 rounded-xl object-cover border-2 border-white/40 flex-shrink-0" />
         ) : (

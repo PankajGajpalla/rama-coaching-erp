@@ -1,6 +1,6 @@
-from sqlalchemy import Column, Integer, String, Date, Float, ForeignKey, UniqueConstraint, Text, Boolean
+from sqlalchemy import Column, Integer, String, Date, Float, ForeignKey, UniqueConstraint, Text, Boolean, DateTime
 from database import Base
-
+from datetime import datetime
 
 
 class StudentDB(Base):
@@ -22,6 +22,17 @@ class StudentDB(Base):
     medium = Column(String(20), nullable=True)          # hindi / english
     admission_date = Column(Date, nullable=True)
     photo = Column(Text, nullable=True)                 # base64 image
+    # ── Fee Instalments ──────────────────────────────────────────
+    inst1_date   = Column(Date,  nullable=True)
+    inst1_amount = Column(Float, nullable=True)
+    inst2_date   = Column(Date,  nullable=True)
+    inst2_amount = Column(Float, nullable=True)
+    inst3_date   = Column(Date,  nullable=True)
+    inst3_amount = Column(Float, nullable=True)
+    inst4_date   = Column(Date,  nullable=True)
+    inst4_amount = Column(Float, nullable=True)
+    inst5_date   = Column(Date,  nullable=True)
+    inst5_amount = Column(Float, nullable=True)
 
 class CourseDB(Base):
     __tablename__ = "courses"
@@ -111,7 +122,8 @@ class GradeDB(Base):
     total_marks = Column(Float, nullable=False)
     grade = Column(String(5), nullable=True)
     test_title = Column(String(200), nullable=True)  # e.g. "Unit Test 1", "Mid Term"
-
+    test_date  = Column(Date, nullable=True)
+    is_absent   = Column(Boolean, default=False, nullable=True)
 
 class TimetableDB(Base):
     __tablename__ = "timetable"
@@ -202,12 +214,60 @@ class NoticeReadDB(Base):
     read_at = Column(String(50), nullable=False)
 
 
-class ParentStudentDB(Base):
-    """Many-to-many: a parent account can be linked to multiple students."""
-    __tablename__ = "parent_students"
-    __table_args__ = (
-        UniqueConstraint('parent_id', 'student_id', name='uq_parent_student'),
-    )
-    id = Column(Integer, primary_key=True, index=True)
-    parent_id  = Column(Integer, ForeignKey("users.id",    ondelete="CASCADE"), nullable=False)
-    student_id = Column(Integer, ForeignKey("students.id", ondelete="CASCADE"), nullable=False)
+class InquiryDB(Base):
+    __tablename__ = "inquiries"
+    id                 = Column(Integer, primary_key=True, index=True)
+    date               = Column(Date, nullable=False)
+    student_name       = Column(String(200), nullable=False)
+    course_interested  = Column(String(200), nullable=True)
+    student_phone      = Column(String(50),  nullable=True)
+    parent_phone       = Column(String(50),  nullable=True)
+    mode               = Column(String(20),  nullable=False)   # 'phone' | 'walk_in'
+    attended_by        = Column(String(200), nullable=True)
+    negotiated_amount  = Column(Float,       nullable=True)
+    referral_source    = Column(String(200), nullable=True)
+    remarks            = Column(String(50),  nullable=True)    # 'interested' | 'not_interested' | 'demo_requested' | 'other'
+    custom_remark      = Column(Text,        nullable=True)
+    status             = Column(String(20),  default="inquiry") # 'inquiry' | 'admitted' | 'not_interested'
+    admission_date     = Column(Date,        nullable=True)
+    created_at         = Column(String(50),  nullable=True)
+
+
+class InquiryFollowUpDB(Base):
+    __tablename__ = "inquiry_followups"
+    id                 = Column(Integer, primary_key=True, index=True)
+    inquiry_id         = Column(Integer, ForeignKey("inquiries.id", ondelete="CASCADE"), nullable=False)
+    date               = Column(Date,   nullable=False)
+    notes              = Column(Text,   nullable=True)
+    outcome            = Column(String(50), nullable=True)  # 'interested' | 'not_interested' | 'demo_scheduled' | 'call_back'
+    next_followup_date = Column(Date,   nullable=True)
+    created_by         = Column(String(200), nullable=True)
+    created_at         = Column(String(50),  nullable=True)
+
+
+class ExpenseDB(Base):
+    __tablename__ = "expenses"
+    id          = Column(Integer, primary_key=True, index=True)
+    title       = Column(String(200), nullable=False)
+    category    = Column(String(100), nullable=False)
+    amount      = Column(Float,       nullable=False)
+    date        = Column(Date,        nullable=False)
+    description = Column(Text,        nullable=True)
+    added_by    = Column(String(100), nullable=False)
+    created_at  = Column(String(50),  nullable=False)
+
+
+class TaskDB(Base):
+    __tablename__ = "tasks"
+    id               = Column(Integer, primary_key=True, index=True)
+    title            = Column(String(200), nullable=False)
+    description      = Column(Text,        nullable=True)
+    assigned_to      = Column(Integer, ForeignKey("users.id"), nullable=False)
+    assigned_to_name = Column(String(100), nullable=True)
+    assigned_by      = Column(String(100), nullable=False)
+    frequency        = Column(String(20),  default="one-time")  # one-time / daily / weekly / monthly
+    priority         = Column(String(10),  default="medium")    # low / medium / high
+    due_date         = Column(Date,        nullable=True)
+    status           = Column(String(20),  default="pending")   # pending / in_progress / completed
+    notes            = Column(Text,        nullable=True)        # completion note from employee
+    created_at       = Column(String(50),  nullable=False)

@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, Link } from "react-router-dom"
 import { loginAPI } from "../api"
 import { useAuth } from "../context/AuthContext"
 
@@ -7,55 +7,70 @@ export default function Login() {
   const navigate = useNavigate()
   const { login } = useAuth()
 
-  const [form, setForm]               = useState({ username: "", password: "" })
-  const [error, setError]             = useState("")
-  const [loading, setLoading]         = useState(false)
+  const [form, setForm] = useState({ username: "", password: "" })
+  const [error, setError] = useState("")
+  const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value })
-    if (error) setError("")
+    if (error) setError("") // clear error on typing
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError("")
+
+    // ✅ Validate before calling API
     if (!form.username.trim() || !form.password.trim()) {
       setError("Username and password are required")
       return
     }
+
     setLoading(true)
+
     try {
-      const res  = await loginAPI(form)
+      const res = await loginAPI(form)
       const user = login(res.data.access_token)
-      if (user?.role === "teacher")      navigate("/teacher")
-      else if (user?.role === "student") navigate("/student/dashboard")
-      else if (user?.role === "staff")   navigate("/staff/dashboard")
-      else if (user?.role === "parent")  navigate("/parent/dashboard")
-      else                               navigate("/dashboard")
+
+      // ✅ Redirect based on role
+      if (user?.role === "teacher") {
+        navigate("/teacher")
+      } else if (user?.role === "student") {
+        navigate("/student/dashboard")
+      } else if (user?.role === "staff") {
+        navigate("/staff/dashboard")
+      } else {
+        navigate("/dashboard")
+      }
     } catch (err) {
-      setError(err.response?.data?.detail || "Invalid credentials. Please try again.")
+      setError(err.response?.data?.detail || "Login failed. Please try again.")
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow-lg px-8 py-10">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-gray-100 flex items-center justify-center p-4">
+      <div className="bg-white p-8 rounded-2xl shadow-lg w-full max-w-sm">
 
-        {/* Logo */}
-        <div className="flex flex-col items-center mb-8">
-          <div className="w-24 h-24 rounded-2xl overflow-hidden shadow mb-3">
-            <img src="/rama_logo.jpeg" alt="RAMA Coaching" className="w-full h-full object-contain" />
-          </div>
-          <h1 className="text-xl font-bold text-slate-800">RAMA Coaching</h1>
+        {/* Logo / Title */}
+        <div className="text-center mb-8">
+          <img
+            src="/logo.png"
+            alt="Rama Coaching"
+            className="w-28 h-28 object-contain mx-auto mb-3"
+          />
+          <h2 className="text-2xl font-bold text-gray-800">Rama Coaching</h2>
+          <p className="text-gray-400 text-sm mt-1">Sign in to your account</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-
+          {/* Username */}
           <div>
-            <label className="form-label">Username</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Username
+            </label>
             <input
               type="text"
               name="username"
@@ -63,12 +78,15 @@ export default function Login() {
               value={form.username}
               onChange={handleChange}
               autoComplete="username"
-              className="inp"
+              className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
 
+          {/* Password */}
           <div>
-            <label className="form-label">Password</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Password
+            </label>
             <div className="relative">
               <input
                 type={showPassword ? "text" : "password"}
@@ -77,44 +95,51 @@ export default function Login() {
                 value={form.password}
                 onChange={handleChange}
                 autoComplete="current-password"
-                className="inp pr-16"
+                className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-12"
               />
+              {/* ✅ Password visibility toggle */}
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400 hover:text-slate-600 transition"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm"
               >
                 {showPassword ? "Hide" : "Show"}
               </button>
             </div>
           </div>
 
+          {/* Error */}
           {error && (
-            <div className="flex items-center gap-2.5 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
-              <svg className="w-4 h-4 text-red-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+            <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-2">
               <p className="text-red-600 text-sm">{error}</p>
             </div>
           )}
 
+          {/* Submit */}
           <button
             type="submit"
             disabled={loading}
-            className="btn-primary w-full py-2.5 text-base mt-2"
+            className="w-full bg-blue-600 text-white py-2.5 rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed mt-2"
           >
             {loading ? (
-              <>
+              <span className="flex items-center justify-center gap-2">
                 <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
                 </svg>
-                Signing in…
-              </>
+                Signing in...
+              </span>
             ) : "Sign In"}
           </button>
-
         </form>
+
+        <p className="text-center text-sm text-gray-500 mt-6">
+          New student?{" "}
+          <Link to="/register" className="text-blue-600 hover:underline font-medium">
+            Register here
+          </Link>
+        </p>
+
       </div>
     </div>
   )

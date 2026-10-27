@@ -6,8 +6,8 @@ SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
 
 if not SQLALCHEMY_DATABASE_URL:
     # fallback for local development
-    SQLALCHEMY_DATABASE_URL = "postgresql://postgres:postgres123@127.0.0.1:5432/Ramacoaching_db"
-    print("WARNING: DATABASE_URL not set. Using local database.")
+    SQLALCHEMY_DATABASE_URL = "postgresql://postgres:yourpassword@localhost:5432/erp_db"
+    print("⚠️  WARNING: DATABASE_URL not set. Using local database.")
 
 # Render gives URLs starting with postgres:// but SQLAlchemy needs postgresql://
 if SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
@@ -15,12 +15,10 @@ if SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
-    pool_size=3,           # keep 3 connections open (Supabase free = limited connections)
-    max_overflow=5,        # allow 5 extra under burst traffic
-    pool_pre_ping=True,    # test connection before using (prevents stale connection errors)
-    pool_recycle=1800,     # recycle every 30 min (prevents Supabase idle timeout drops)
-    pool_timeout=30,       # wait max 30s for a free connection before raising error
-    connect_args={"connect_timeout": 10},  # fail fast if DB unreachable
+    pool_size=5,           # number of connections to keep open
+    max_overflow=10,       # extra connections allowed beyond pool_size
+    pool_pre_ping=True,    # ✅ test connection before using it (prevents stale connections)
+    pool_recycle=300,      # recycle connections every 5 minutes
 )
 
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)

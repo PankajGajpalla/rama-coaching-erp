@@ -7,6 +7,7 @@ import {
   markAttendanceBulkAPI,
   checkAttendanceBulkAPI,
   getStudentAttendanceAPI,
+  searchStudentsAPI,
 } from "../api"
 
 export default function TeacherAttendance() {
@@ -94,8 +95,8 @@ function MarkAttendance() {
     }
   }
 
-  function toggleAttendance(id) {
-    setAttendance((prev) => ({ ...prev, [id]: prev[id] === "present" ? "absent" : "present" }))
+  function setStatus(id, status) {
+    setAttendance((prev) => ({ ...prev, [id]: status }))
   }
 
   function markAll(status) {
@@ -106,6 +107,7 @@ function MarkAttendance() {
 
   async function handleSubmit() {
     const changed = students.filter((s) => {
+      if (attendance[s.id] === "skip") return false   // skip = don't submit, no SMS
       const orig = originalStatus[s.id]
       return orig === undefined || orig !== attendance[s.id]
     })
@@ -138,12 +140,15 @@ function MarkAttendance() {
 
   const presentCount  = students.filter((s) => attendance[s.id] === "present").length
   const absentCount   = students.filter((s) => attendance[s.id] === "absent").length
-  const newCount      = students.filter((s) => originalStatus[s.id] === undefined).length
+  const skipCount     = students.filter((s) => attendance[s.id] === "skip").length
+  const newCount      = students.filter((s) => originalStatus[s.id] === undefined && attendance[s.id] !== "skip").length
   const editedCount   = students.filter((s) => {
+    if (attendance[s.id] === "skip") return false
     const orig = originalStatus[s.id]
     return orig !== undefined && orig !== attendance[s.id]
   }).length
   const unchangedCount = students.filter((s) => {
+    if (attendance[s.id] === "skip") return false
     const orig = originalStatus[s.id]
     return orig !== undefined && orig === attendance[s.id]
   }).length
@@ -192,6 +197,7 @@ function MarkAttendance() {
               <p className="text-sm text-slate-400 mt-1 flex flex-wrap gap-3">
                 <span className="text-green-600 font-medium">✓ {presentCount} present</span>
                 <span className="text-red-500 font-medium">✗ {absentCount} absent</span>
+                {skipCount > 0 && <span className="text-slate-400 font-medium">— {skipCount} skipped</span>}
                 {alreadyMarkedCount > 0 && (
                   <span className="text-blue-500">
                     · {alreadyMarkedCount} already marked
@@ -208,57 +214,67 @@ function MarkAttendance() {
               </p>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <button onClick={() => markAll("present")} className="btn-success text-xs px-3 py-1.5">All Present</button>
               <button onClick={() => markAll("absent")}  className="btn-danger text-xs px-3 py-1.5">All Absent</button>
+              <button onClick={() => markAll("skip")} className="text-xs px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-lg font-medium transition">Clear All</button>
             </div>
           </div>
 
           {/* ── Mobile card list (shown on small screens) ── */}
           <div className="md:hidden divide-y divide-slate-100">
             {students.map((s) => {
-              const isPresent   = attendance[s.id] === "present"
+              const status      = attendance[s.id]
+              const isPresent   = status === "present"
+              const isAbsent    = status === "absent"
+              const isSkipped   = status === "skip"
               const orig        = originalStatus[s.id]
               const isNew       = orig === undefined
-              const isEdited    = !isNew && orig !== attendance[s.id]
-              const isUnchanged = !isNew && !isEdited
+              const isEdited    = !isNew && !isSkipped && orig !== status
+              const isUnchanged = !isNew && !isSkipped && orig === status
 
               return (
                 <div key={s.id}
                   className={`flex items-center justify-between gap-3 px-4 py-3 transition
-                    ${isUnchanged
-                      ? (isPresent ? "bg-green-50/50" : "bg-red-50/50")
-                      : (isPresent ? "bg-green-50"    : "bg-red-50")}`}>
+                    ${isSkipped   ? "bg-slate-50"
+                      : isUnchanged
+                        ? (isPresent ? "bg-green-50/50" : "bg-red-50/50")
+                        : (isPresent ? "bg-green-50"    : "bg-red-50")}`}>
 
                   {/* Left: student info */}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <p className="font-semibold text-slate-800 text-sm truncate">{s.name}</p>
+                      <p className={`font-semibold text-sm truncate ${isSkipped ? "text-slate-400" : "text-slate-800"}`}>{s.name}</p>
                       {s.is_additional && (
                         <span className="bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded text-[10px] font-medium">+Add</span>
                       )}
-                      {isEdited && (
-                        <span className="badge badge-yellow text-[10px]">edited</span>
-                      )}
-                      {isUnchanged && (
-                        <span className="badge badge-blue text-[10px]">✓</span>
-                      )}
+                      {isEdited    && <span className="badge badge-yellow text-[10px]">edited</span>}
+                      {isUnchanged && <span className="badge badge-blue text-[10px]">✓</span>}
+                      {isSkipped   && <span className="text-[10px] text-slate-400 italic">skipped · no SMS</span>}
                     </div>
                     <p className="text-xs text-slate-400 font-mono mt-0.5">{s.student_code || `#${s.id}`}</p>
                   </div>
 
-                  {/* Right: status badge + big toggle button */}
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className={`badge ${isPresent ? "badge-green" : "badge-red"}`}>
-                      {isPresent ? "P" : "A"}
-                    </span>
+                  {/* Right: 3-way segmented control */}
+                  <div className="flex items-center gap-1 flex-shrink-0">
                     <button
-                      onClick={() => toggleAttendance(s.id)}
-                      className={`min-w-[96px] py-2 px-3 rounded-lg text-sm font-semibold transition active:scale-95
-                        ${isPresent
-                          ? "bg-red-500 hover:bg-red-600 text-white"
-                          : "bg-emerald-500 hover:bg-emerald-600 text-white"}`}>
-                      {isPresent ? "Mark Absent" : "Mark Present"}
+                      onClick={() => setStatus(s.id, "present")}
+                      className={`px-2.5 py-2 rounded-lg text-xs font-bold transition active:scale-95
+                        ${isPresent ? "bg-emerald-500 text-white shadow-sm" : "bg-slate-100 text-slate-500 hover:bg-emerald-100 hover:text-emerald-700"}`}>
+                      P
+                    </button>
+                    <button
+                      onClick={() => setStatus(s.id, "absent")}
+                      className={`px-2.5 py-2 rounded-lg text-xs font-bold transition active:scale-95
+                        ${isAbsent ? "bg-red-500 text-white shadow-sm" : "bg-slate-100 text-slate-500 hover:bg-red-100 hover:text-red-700"}`}>
+                      A
+                    </button>
+                    <button
+                      onClick={() => setStatus(s.id, "skip")}
+                      title="Skip – no record saved, no SMS sent"
+                      className={`px-2.5 py-2 rounded-lg text-xs font-bold transition active:scale-95
+                        ${isSkipped ? "bg-slate-400 text-white shadow-sm" : "bg-slate-100 text-slate-400 hover:bg-slate-200"}`}>
+                      —
                     </button>
                   </div>
                 </div>
@@ -281,20 +297,25 @@ function MarkAttendance() {
               </thead>
               <tbody>
                 {students.map((s) => {
-                  const isPresent   = attendance[s.id] === "present"
+                  const status      = attendance[s.id]
+                  const isPresent   = status === "present"
+                  const isAbsent    = status === "absent"
+                  const isSkipped   = status === "skip"
                   const orig        = originalStatus[s.id]
                   const isNew       = orig === undefined
-                  const isEdited    = !isNew && orig !== attendance[s.id]
-                  const isUnchanged = !isNew && !isEdited
+                  const isEdited    = !isNew && !isSkipped && orig !== status
+                  const isUnchanged = !isNew && !isSkipped && orig === status
 
-                  const rowBg = isUnchanged
-                    ? (isPresent ? "bg-green-50/60" : "bg-red-50/60")
-                    : (isPresent ? "bg-green-50"    : "bg-red-50")
+                  const rowBg = isSkipped
+                    ? "bg-slate-50 opacity-70"
+                    : isUnchanged
+                      ? (isPresent ? "bg-green-50/60" : "bg-red-50/60")
+                      : (isPresent ? "bg-green-50"    : "bg-red-50")
 
                   return (
                     <tr key={s.id} className={`border-b border-slate-100 transition ${rowBg}`}>
                       <td className="text-slate-400 font-mono text-xs">{s.student_code || s.id}</td>
-                      <td className="font-medium text-slate-800">
+                      <td className={`font-medium ${isSkipped ? "text-slate-400" : "text-slate-800"}`}>
                         {s.name}
                         {s.is_additional && (
                           <span className="ml-2 bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded text-xs font-medium">+Add</span>
@@ -306,26 +327,37 @@ function MarkAttendance() {
                         </span>
                       </td>
                       <td>
-                        <span className={`badge ${isPresent ? "badge-green" : "badge-red"}`}>
-                          {isPresent ? "Present" : "Absent"}
-                        </span>
+                        {isSkipped
+                          ? <span className="text-xs text-slate-400 italic">— skipped</span>
+                          : <span className={`badge ${isPresent ? "badge-green" : "badge-red"}`}>
+                              {isPresent ? "Present" : "Absent"}
+                            </span>
+                        }
                       </td>
                       <td>
-                        {isNew       && <span className="badge badge-gray">New</span>}
-                        {isUnchanged && <span className="badge badge-blue">✓ Marked</span>}
-                        {isEdited    && (
-                          <span className="badge badge-yellow">
-                            ✏️ Edited ({orig} → {attendance[s.id]})
-                          </span>
+                        {isSkipped   && <span className="text-xs text-slate-400 italic">no SMS sent</span>}
+                        {!isSkipped && isNew       && <span className="badge badge-gray">New</span>}
+                        {!isSkipped && isUnchanged && <span className="badge badge-blue">✓ Marked</span>}
+                        {!isSkipped && isEdited    && (
+                          <span className="badge badge-yellow">✏️ {orig} → {status}</span>
                         )}
                       </td>
                       <td>
-                        <button onClick={() => toggleAttendance(s.id)}
-                          className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
-                            isPresent ? "bg-red-100 text-red-700 hover:bg-red-200" : "bg-green-100 text-green-700 hover:bg-green-200"
-                          }`}>
-                          Mark {isPresent ? "Absent" : "Present"}
-                        </button>
+                        <div className="flex gap-1">
+                          <button onClick={() => setStatus(s.id, "present")}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition ${
+                              isPresent ? "bg-emerald-500 text-white" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                            }`}>P</button>
+                          <button onClick={() => setStatus(s.id, "absent")}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition ${
+                              isAbsent ? "bg-red-500 text-white" : "bg-red-50 text-red-700 hover:bg-red-100"
+                            }`}>A</button>
+                          <button onClick={() => setStatus(s.id, "skip")}
+                            title="Skip — no record saved, no SMS sent"
+                            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition ${
+                              isSkipped ? "bg-slate-400 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                            }`}>—</button>
+                        </div>
                       </td>
                     </tr>
                   )
@@ -342,7 +374,8 @@ function MarkAttendance() {
                 : <>Will submit <strong>{toSubmitCount}</strong> record{toSubmitCount !== 1 ? "s" : ""}
                     {newCount > 0      && <span className="ml-1 text-slate-600">({newCount} new{editedCount > 0 ? `, ${editedCount} edited` : ""})</span>}
                     {editedCount > 0 && newCount === 0 && <span className="ml-1 text-slate-600">({editedCount} edited)</span>}
-                    {unchangedCount > 0 && <span className="ml-1 text-slate-400">· {unchangedCount} unchanged skipped</span>}
+                    {unchangedCount > 0 && <span className="ml-1 text-slate-400">· {unchangedCount} unchanged</span>}
+                    {skipCount > 0 && <span className="ml-1 text-slate-400">· {skipCount} skipped (no SMS)</span>}
                   </>
               }
             </p>
@@ -360,55 +393,149 @@ function MarkAttendance() {
 // VIEW ATTENDANCE
 // ─────────────────────────────────────────────────────────────────────────────
 function ViewAttendance() {
-  const [studentId, setStudentId] = useState("")
-  const [records, setRecords]     = useState([])
-  const [loading, setLoading]     = useState(false)
-  const [error, setError]         = useState("")
+  const [courses, setCourses]             = useState([])
+  const [selectedCourse, setSelectedCourse] = useState("")
+  const [courseStudents, setCourseStudents] = useState([])
+  const [courseLoading, setCourseLoading] = useState(false)
+  const [nameFilter, setNameFilter]       = useState("")
 
-  async function handleSearch(e) {
-    e.preventDefault()
-    if (!studentId) { setError("Enter a student ID"); return }
-    setLoading(true); setError("")
+  const [student, setStudent]   = useState(null)
+  const [records, setRecords]   = useState([])
+  const [loading, setLoading]   = useState(false)
+  const [error, setError]       = useState("")
+
+  useEffect(() => {
+    getCoursesAPI().then((r) => setCourses(r.data.courses || [])).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    if (!selectedCourse) { setCourseStudents([]); setNameFilter(""); return }
+    setCourseLoading(true)
+    getStudentsByCourseAPI(selectedCourse)
+      .then((r) => setCourseStudents(r.data.students || []))
+      .catch(() => setCourseStudents([]))
+      .finally(() => setCourseLoading(false))
+  }, [selectedCourse])
+
+  async function loadStudentAttendance(s) {
+    setStudent(s); setRecords([]); setError(""); setLoading(true)
     try {
-      const res = await getStudentAttendanceAPI(studentId)
-      setRecords(res.data.attendance)
-      if (res.data.attendance.length === 0) setError("No attendance records found for this student")
+      const res = await getStudentAttendanceAPI(s.id)
+      const att = res.data.attendance || []
+      setRecords(att)
+      if (att.length === 0) setError("No attendance records found for this student yet.")
     } catch { setError("Failed to load attendance") }
     finally { setLoading(false) }
   }
 
+  function clearStudent() {
+    setStudent(null); setRecords([]); setError("")
+  }
+
+  const filtered = nameFilter.trim()
+    ? courseStudents.filter((s) => s.name.toLowerCase().includes(nameFilter.toLowerCase()))
+    : courseStudents
+
   const present = records.filter((r) => r.status === "present").length
+  const absent  = records.filter((r) => r.status === "absent").length
   const total   = records.length
   const pct     = total > 0 ? ((present / total) * 100).toFixed(1) : 0
 
   return (
     <div className="space-y-5">
-      <div className="card p-6">
-        <h3 className="section-title mb-3">View Student Attendance</h3>
-        <form onSubmit={handleSearch} className="flex gap-3">
-          <input type="number" placeholder="Student ID" value={studentId} min="1"
-            onChange={(e) => { setStudentId(e.target.value); setError("") }}
-            className="inp w-40" />
-          <button type="submit" disabled={loading} className="btn-ghost">
-            {loading ? "Searching…" : "Search"}
-          </button>
-        </form>
-        {error && <div className="mt-3"><Alert type="error" message={error} onClose={() => setError("")} /></div>}
+
+      {/* ── Course + Name selector ── */}
+      <div className="card p-6 space-y-4">
+        <h3 className="section-title">View Student Attendance</h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="form-label">Course</label>
+            <select value={selectedCourse}
+              onChange={(e) => { setSelectedCourse(e.target.value); clearStudent() }}
+              className="inp">
+              <option value="">— Select a course —</option>
+              {courses.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="form-label">Search by Name</label>
+            <input type="text" placeholder="Type student name…"
+              value={nameFilter} onChange={(e) => setNameFilter(e.target.value)}
+              disabled={!selectedCourse}
+              className="inp" />
+          </div>
+        </div>
+
+        {courseLoading && <LoadingState message="Loading students…" />}
+
+        {!courseLoading && selectedCourse && courseStudents.length === 0 && (
+          <p className="text-sm text-slate-400">No students found in this course.</p>
+        )}
+
+        {filtered.length > 0 && (
+          <div>
+            <p className="text-xs text-slate-400 mb-2">
+              {filtered.length} student{filtered.length !== 1 ? "s" : ""} — click to view attendance
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-60 overflow-y-auto pr-1">
+              {filtered.map((s) => (
+                <button key={s.id} onClick={() => loadStudentAttendance(s)}
+                  className={`text-left rounded-lg border px-3 py-2.5 transition hover:shadow-md hover:border-blue-400 hover:bg-blue-50
+                    ${student?.id === s.id ? "border-blue-500 bg-blue-50 shadow-md" : "border-slate-200 bg-white"}`}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                      {s.name.charAt(0).toUpperCase()}
+                    </div>
+                    <span className="font-mono text-xs text-slate-400">{s.student_code || `#${s.id}`}</span>
+                  </div>
+                  <p className="text-sm font-semibold text-slate-800 leading-tight truncate">{s.name}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {error && <Alert type="error" message={error} onClose={() => setError("")} />}
       </div>
 
-      {records.length > 0 && (
+      {loading && <LoadingState message="Loading attendance…" />}
+
+      {/* ── Student attendance result ── */}
+      {student && !loading && records.length > 0 && (
         <>
-          <div className="grid grid-cols-3 gap-4">
-            {[["Total Classes", total, "border-blue-500", "text-blue-600"],
-              ["Present", present, "border-green-500", "text-green-600"],
-              [`${pct}%`, "Attendance", "border-purple-500", "text-purple-600"]].map(([val, label, border, text]) => (
-              <div key={label} className={`card p-5 border-l-4 ${border}`}>
-                <p className="text-xs text-slate-500">{label}</p>
-                <p className={`text-2xl font-bold ${text}`}>{val}</p>
-              </div>
-            ))}
+          {/* Student banner */}
+          <div className="card p-4 flex items-center gap-4">
+            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-lg flex-shrink-0">🎓</div>
+            <div className="flex-1">
+              <p className="font-bold text-slate-800">{student.name}</p>
+              <p className="text-xs text-slate-400 font-mono">{student.student_code || `#${student.id}`} · {selectedCourse}</p>
+            </div>
+            <button onClick={clearStudent} className="text-slate-400 hover:text-red-500 text-xl font-bold leading-none transition">×</button>
           </div>
+
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="card p-5 border-l-4 border-blue-500">
+              <p className="text-xs text-slate-500">Total Classes</p>
+              <p className="text-2xl font-bold text-blue-600">{total}</p>
+            </div>
+            <div className="card p-5 border-l-4 border-green-500">
+              <p className="text-xs text-slate-500">Present</p>
+              <p className="text-2xl font-bold text-green-600">{present}</p>
+            </div>
+            <div className="card p-5 border-l-4 border-purple-500">
+              <p className="text-xs text-slate-500">Attendance %</p>
+              <p className={`text-2xl font-bold ${parseFloat(pct) >= 75 ? "text-green-600" : parseFloat(pct) >= 50 ? "text-orange-500" : "text-red-600"}`}>{pct}%</p>
+            </div>
+          </div>
+
+          {/* Records table */}
           <div className="card overflow-hidden">
+            <div className="px-5 py-3 border-b border-slate-100 flex justify-between items-center">
+              <p className="font-semibold text-slate-700">{student.name} — Attendance Log</p>
+              {absent > 0 && <span className="text-xs text-red-500 font-medium">{absent} absent</span>}
+            </div>
             <table className="tbl">
               <thead>
                 <tr><th>Date</th><th>Status</th></tr>

@@ -54,7 +54,7 @@ function validateRow(row) {
   if (row.fees_paid != null && row.fees_paid !== "" && row.fees != null && row.fees !== "" &&
       parseFloat(row.fees_paid) > parseFloat(row.fees)) errors.push("fees_paid cannot exceed fees")
   if (row.fees_paid != null && row.fees_paid !== "" && parseFloat(row.fees_paid) < 0) errors.push("fees_paid cannot be negative")
-  // medium is fully optional — never validate, auto-normalised during import
+  if (row.medium && !VALID_MEDIUMS.includes(String(row.medium).toLowerCase().trim())) errors.push("medium must be 'hindi' or 'english'")
   if (row.admission_date && !isValidDate(row.admission_date)) errors.push("admission_date invalid (use YYYY-MM-DD)")
   return errors
 }
@@ -182,7 +182,7 @@ export default function ImportStudents() {
           fees: row.fees != null && row.fees !== "" ? parseFloat(row.fees) : null,
           fees_paid: row.fees_paid != null && row.fees_paid !== "" ? parseFloat(row.fees_paid) : null,
           school_college_name: safeStr(row.school_college_name) || null,
-          medium: safeStr(row.medium).toLowerCase().includes("hindi") ? "hindi" : "english",
+          medium: safeStr(row.medium).toLowerCase() || null,
           admission_date: toDateString(row.admission_date),
           photo: row.photo ? safeStr(row.photo) : null,
         }))
@@ -241,7 +241,7 @@ export default function ImportStudents() {
       <Sidebar />
       <main className="page-main">
 
-        <div className="page-header">
+        <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold text-slate-800">Import Students</h2>
           <button
             onClick={downloadTemplate}
@@ -439,9 +439,11 @@ export default function ImportStudents() {
                             : <span className="text-gray-300">—</span>}
                         </td>
                         <td className="px-4 py-2">
-                          {safeStr(row.medium).toLowerCase().includes("hindi")
-                            ? "Hindi"
-                            : "English"}
+                          {row.medium
+                            ? VALID_MEDIUMS.includes(row.medium.toString().toLowerCase().trim())
+                              ? row.medium
+                              : <Err label="must be hindi/english" />
+                            : <Err />}
                         </td>
                         <td className="px-4 py-2">{toDateString(row.admission_date) || <Err label="invalid date" />}</td>
                         <td className="px-4 py-2">{row.school_college_name || <Err />}</td>

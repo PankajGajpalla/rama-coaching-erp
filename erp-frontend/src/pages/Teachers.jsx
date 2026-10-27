@@ -66,8 +66,8 @@ function AssignSubjectsModal({ teacher, allSubjects, onClose, onSaved }) {
   const courseNames = Object.keys(byCourse)
 
   return (
-    <div className="modal-backdrop">
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-modal w-full sm:max-w-lg max-h-[90dvh] overflow-y-auto flex flex-col max-h-[90dvh]">
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
         <div className="flex items-start justify-between px-6 py-4 border-b border-slate-100">
           <div>
             <h3 className="text-lg font-bold text-slate-800">📚 Assign Subjects</h3>
@@ -428,8 +428,8 @@ export default function Teachers() {
 
         {/* Manage Login Modal */}
         {loginModal && (
-          <div className="modal-backdrop">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90dvh] overflow-y-auto">
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
               <div className="flex justify-between items-start px-6 pt-6 pb-4 border-b border-slate-100">
                 <div>
                   <h3 className="text-lg font-bold text-slate-800">🔑 Manage Login</h3>

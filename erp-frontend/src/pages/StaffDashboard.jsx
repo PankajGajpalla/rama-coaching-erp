@@ -23,7 +23,7 @@ export default function StaffDashboard() {
       <main className="page-main">
         <div className="mb-6">
           <h2 className="text-2xl font-bold text-slate-800">Welcome, {user?.sub} 👋</h2>
-          <p className="text-slate-400 text-sm mt-1">Staff Dashboard — Coaching ERP</p>
+          <p className="text-slate-400 text-sm mt-1">Staff Dashboard — Rama Coaching</p>
         </div>
 
         {loading && <LoadingState />}

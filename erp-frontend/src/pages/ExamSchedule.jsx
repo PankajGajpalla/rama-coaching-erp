@@ -211,7 +211,7 @@ function EditModal({ exam, courses, onClose, onSave, saving }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-modal w-full sm:max-w-lg max-h-[90dvh] overflow-y-auto max-h-[90dvh] overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b">
           <h2 className="text-lg font-bold text-gray-800">Edit Exam</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
@@ -656,7 +656,7 @@ export default function ExamSchedule() {
       <main className="page-main">
 
         {/* Header */}
-        <div className="page-header">
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <div>
             <h2 className="text-xl font-bold text-slate-800">Exam Schedule</h2>
             <p className="text-sm text-gray-500 mt-1">Manage exam schedules across all courses</p>

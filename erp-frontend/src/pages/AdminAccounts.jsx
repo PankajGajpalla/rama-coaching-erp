@@ -482,7 +482,7 @@ export default function AdminAccounts() {
 
         {/* ── Staff Edit Modal ── */}
         {staffEditModal && (
-          <div className="modal-backdrop">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
               <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b">
                 <div>
@@ -553,7 +553,7 @@ export default function AdminAccounts() {
 
         {/* ── Edit Modal ── */}
         {editModal && (
-          <div className="modal-backdrop">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
 
               {/* Header */}
