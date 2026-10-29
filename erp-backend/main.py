@@ -204,7 +204,7 @@ def run_migrations():
             id SERIAL PRIMARY KEY,
             student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
             course_id  INTEGER NOT NULL REFERENCES courses(id)  ON DELETE CASCADE,
-            CONSTRAINT uq_student_additional_course UNIQUE (student_id, course_id)
+            CONSTRAINT uq_student_adNditional_course UNIQUE (student_id, course_id)
         )""",
         # ── Attendance constraint change ──────────────────────────────────────────
         # Old design: one record per (student, date, subject) — subject is no longer

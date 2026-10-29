@@ -22,3 +22,4 @@ else:
     print("Admin created!")
 db.commit()
 db.close()
+
